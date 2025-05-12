@@ -216,8 +216,8 @@ def initialize_database():
             hashed_pw = hash_password("8463")
             cursor.execute("""
                 INSERT INTO users (username, password, role, can_add, can_delete, active, specialty)
-                VALUES (?, ?, ?, ?, ?, ?)
-            """, ("Nelson", hashed_pw, "admin", 1, 1, 1))
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, ("Nelson", hashed_pw, "admin", 1, 1, 1, ""))
 
         conn.commit()
 
