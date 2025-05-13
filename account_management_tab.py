@@ -2,13 +2,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import sqlite3
 import hashlib
+from utils import log_activity
 
 def build_user_management_tab(tab, db_name, current_user):
     frame = tk.Frame(tab)
     frame.pack(fill="both", expand=True, padx=10, pady=10)
     tk.Label(frame, text="帳號管理").pack(anchor="w")
 
-    # 篩選與排序區塊
     control_frame = tk.Frame(frame)
     control_frame.pack(anchor="w", pady=(0, 5))
 
@@ -52,21 +52,17 @@ def build_user_management_tab(tab, db_name, current_user):
 
     filter_combo.bind("<<ComboboxSelected>>", lambda e: refresh_users())
 
-    # === 新增帳號表單 ===
     form = tk.LabelFrame(frame, text="新增使用者")
     form.pack(fill="x", pady=10, padx=10)
 
-    # 帳號
     tk.Label(form, text="帳號：").grid(row=0, column=0, sticky="e", padx=5, pady=5)
     entry_user = tk.Entry(form, width=30)
     entry_user.grid(row=0, column=1, columnspan=3, sticky="w", padx=5)
 
-    # 密碼
     tk.Label(form, text="密碼：").grid(row=1, column=0, sticky="e", padx=5, pady=5)
     entry_pass = tk.Entry(form, width=30, show="*")
     entry_pass.grid(row=1, column=1, columnspan=3, sticky="w", padx=5)
 
-    # 角色與專長（同排）
     tk.Label(form, text="角色：").grid(row=2, column=0, sticky="e", padx=5, pady=5)
     role_var = tk.StringVar()
     role_menu = ttk.Combobox(form, textvariable=role_var, values=["admin", "engineer", "leader"], state="readonly", width=15)
@@ -78,7 +74,6 @@ def build_user_management_tab(tab, db_name, current_user):
         values=["", "dip", "assembly", "test", "packaging", "oqc"], width=15, state="readonly")
     specialty_combo.grid(row=2, column=3, sticky="w", padx=5)
 
-    # 權限勾選區
     add_var = tk.IntVar(value=1)
     delete_var = tk.IntVar(value=0)
     active_var = tk.IntVar(value=1)
@@ -120,6 +115,7 @@ def build_user_management_tab(tab, db_name, current_user):
             conn.commit()
 
         messagebox.showinfo("成功", "使用者已新增")
+        log_activity(db_name, current_user, "add_user", new_user)
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)
         specialty_var.set("") 
@@ -127,7 +123,6 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Button(form, text="新增使用者", command=add_user, bg="lightblue").grid(row=5, column=1, pady=10)
 
-    # === 權限修改區塊 ===
     edit_frame = tk.LabelFrame(frame, text="修改權限 / 狀態 / 帳號名稱")
     edit_frame.pack(fill="x", pady=10)
 
@@ -212,14 +207,11 @@ def build_user_management_tab(tab, db_name, current_user):
             conn.commit()
 
         messagebox.showinfo("成功", "已更新")
+        log_activity(db_name, current_user, "update_user", original_username)
         entry_edit_user.delete(0, tk.END)
         entry_edit_pass.delete(0, tk.END)
         refresh_users()
 
-
-    tk.Button(edit_frame, text="更新權限", command=update_user).grid(row=5, column=1, pady=5)
-
-    # === 刪除帳號區塊 ===
     def delete_user():
         selected = tree.selection()
         if not selected:
@@ -235,12 +227,11 @@ def build_user_management_tab(tab, db_name, current_user):
                 cursor.execute("DELETE FROM users WHERE username=?", (username,))
                 conn.commit()
             messagebox.showinfo("成功", "使用者已刪除")
+            log_activity(db_name, current_user, "delete_user", username)
             refresh_users()
-
-    delete_frame = tk.Frame(frame)
-    delete_frame.pack(anchor="e", pady=5)
-    tk.Button(delete_frame, text="刪除選取帳號", command=delete_user, bg="lightcoral", fg="white")\
-        .grid(row=0, column=0, padx=10, pady=5)
+    tk.Button(edit_frame, text="更新權限", command=update_user).grid(row=5, column=1, pady=5)
+    tk.Button(edit_frame, text="刪除帳號", command=delete_user, bg="lightcoral", fg="white")\
+    .grid(row=5, column=2, padx=10, pady=5)
 
     refresh_users()
     return tree, refresh_users

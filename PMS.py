@@ -8,6 +8,9 @@ import hashlib
 import subprocess
 import sys
 import tempfile
+from utils import log_activity
+from db.schema_helper import auto_add_missing_columns, get_required_columns
+
 
 
 from account_management_tab import build_user_management_tab
@@ -44,7 +47,6 @@ def sync_back_to_server():
 
 def logout_and_exit(root):
     try:
-        # 等待所有 Tkinter 控制流程處理完成
         root.update_idletasks()
         root.update()
     except:
@@ -107,7 +109,7 @@ def build_log_view_tab(tab, db_name, role):
         if not item or not col:
             return
         col_index = int(col[1:]) - 1
-        if col_index == 2:  # 檔案名稱欄位
+        if col_index == 2:
             filename = tree.item(item)["values"][2]
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
             for base in base_paths:
@@ -121,10 +123,8 @@ def build_log_view_tab(tab, db_name, role):
     button_frame = tk.Frame(tab)
     button_frame.pack(anchor="e", padx=10, pady=(0, 10))
 
-    # 所有人都可以按重新整理
     tk.Button(button_frame, text="重新整理", command=refresh_logs).pack(side="left", padx=5)
 
-    # 只有 Admin 有刪除功能
     if role == "admin":
         def delete_selected_log():
             selected = tree.selection()
@@ -152,13 +152,11 @@ def build_log_view_tab(tab, db_name, role):
 
     refresh_logs()
 
-                
 def initialize_database():
     with sqlite3.connect(DB_NAME) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
 
-        # 建立 issues 表（僅新 DB 建立用）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS issues (
                 product_code TEXT PRIMARY KEY,
@@ -173,14 +171,6 @@ def initialize_database():
             )
         """)
 
-        # 自動補欄位 dip_sop（防止舊 DB 出錯）
-        cursor.execute("PRAGMA table_info(issues)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "dip_sop" not in columns:
-            cursor.execute("ALTER TABLE issues ADD COLUMN dip_sop TEXT")
-            print("✅ 已自動新增 dip_sop 欄位至 issues 表")
-
-        # 建立使用者表（如不存在）
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
@@ -191,15 +181,7 @@ def initialize_database():
                 active INTEGER DEFAULT 1
             )
         """)
-        
-        cursor.execute("PRAGMA table_info(users)")
-        columns = [row[1] for row in cursor.fetchall()]
-        if "specialty" not in columns:
-            cursor.execute("ALTER TABLE users ADD COLUMN specialty TEXT DEFAULT ''")
-            print("✅ 已自動新增 specialty 欄位至 users 表")
 
-        
-        # 建立操作紀錄表（如不存在）
         cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS {LOG_TABLE} (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,7 +192,6 @@ def initialize_database():
             )
         """)
 
-        # 新增預設管理者帳號
         cursor.execute("SELECT COUNT(*) FROM users WHERE username='Nelson'")
         if cursor.fetchone()[0] == 0:
             hashed_pw = hash_password("8463")
@@ -220,6 +201,8 @@ def initialize_database():
             """, ("Nelson", hashed_pw, "admin", 1, 1, 1, ""))
 
         conn.commit()
+
+    auto_add_missing_columns(DB_NAME, get_required_columns())
 
 def save_file(file_path, target_folder, username):
     if not os.path.exists(file_path):
@@ -238,7 +221,6 @@ def save_file(file_path, target_folder, username):
 def update_sop_field(cursor, product_code, field_name, new_file_path):
     cursor.execute(f"UPDATE issues SET {field_name}=?, created_at=? WHERE product_code=?",
                    (new_file_path, datetime.now().isoformat(), product_code))
-
 
 def handle_sop_update(product_code, sop_path, field_name, entry_widget, current_user):
     path = entry_widget.get().strip()
@@ -300,9 +282,9 @@ def create_main_interface(root, db_name, login_info):
 
     tabs = {
         "生產資訊": tk.Frame(notebook),
-        "SOP套用": tk.Frame(notebook),
-        "治具管理": tk.Frame(notebook),
-        "測試BOM": tk.Frame(notebook),
+        "SOP套用": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
+        "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
+        "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
         "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer") else None
 
@@ -429,7 +411,6 @@ def create_main_interface(root, db_name, login_info):
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
 
-            # 預設查全部
             base_query = """
                 SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at
                 FROM issues
@@ -439,14 +420,12 @@ def create_main_interface(root, db_name, login_info):
             params = []
 
             if raw_input:
-                # AND 條件（多個 &）
                 if "&" in raw_input:
                     terms = [t.strip() for t in raw_input.split("&")]
                     for term in terms:
                         conditions.append("(product_code LIKE ? OR product_name LIKE ?)")
                         params.extend([f"%{term}%", f"%{term}%"])
                     condition_sql = " AND ".join(conditions)
-                # OR 條件（多個 /）
                 elif "/" in raw_input:
                     terms = [t.strip() for t in raw_input.split("/")]
                     sub_conditions = []
@@ -455,7 +434,6 @@ def create_main_interface(root, db_name, login_info):
                         params.extend([f"%{term}%", f"%{term}%"])
                     condition_sql = " OR ".join(sub_conditions)
                 else:
-                    # 一般單一關鍵字
                     condition_sql = "(product_code LIKE ? OR product_name LIKE ?)"
                     params = [f"%{raw_input}%", f"%{raw_input}%"]
 
@@ -565,13 +543,11 @@ if __name__ == "__main__":
         default_font = tkFont.nametofont("TkDefaultFont")
         default_font.configure(size=10, family="Microsoft Calibri")
 
-        # 建立頂部工具列（含登出按鈕）
         top_bar = tk.Frame(root)
         top_bar.pack(fill="x", side="top")
         logout_btn = tk.Button(top_bar, text="登出並關閉", command=lambda: logout_and_exit(root), bg="orange")
         logout_btn.pack(side="right", padx=10, pady=5)
 
-        # 主內容區域
         main_frame = tk.Frame(root)
         main_frame.pack(fill="both", expand=True)
         create_main_interface(main_frame, DB_NAME, login_info)
