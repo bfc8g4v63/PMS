@@ -39,6 +39,9 @@ def init_db():
         conn.execute("PRAGMA journal_mode=WAL")
 
 def sync_back_to_server():
+    if DB_NAME == ORIGINAL_DB:
+        print("✅ 無需回寫資料庫，因為 DB 實體與操作一致")
+        return
     try:
         shutil.copy(DB_NAME, ORIGINAL_DB)
         print("✅ 已同步本機資料庫回網路磁碟")
@@ -66,7 +69,7 @@ def log_activity(user, action, filename):
         cursor.execute(f"""
             INSERT INTO {LOG_TABLE} (username, action, filename, timestamp)
             VALUES (?, ?, ?, ?)
-        """, (user, action, filename, datetime.now().isoformat()))
+        """, (user, action, filename, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit()
 
 def open_file(filepath):
@@ -83,6 +86,21 @@ def open_file(filepath):
 def build_log_view_tab(tab, db_name, role):
     tk.Label(tab, text="操作紀錄查詢").pack(anchor="w", padx=10, pady=(10, 0))
 
+    search_frame = tk.Frame(tab)
+    search_frame.pack(fill="x", padx=10, pady=5)
+
+    tk.Label(search_frame, text="查詢關鍵字:").pack(side="left")
+    entry_query = tk.Entry(search_frame)
+    entry_query.pack(side="left")
+    sort_desc = tk.BooleanVar(value=True)
+
+    def toggle_sort():
+        sort_desc.set(not sort_desc.get())
+        refresh_logs()
+
+    tk.Button(search_frame, text="↕排序", command=toggle_sort).pack(side="left", padx=5)
+    tk.Button(search_frame, text="查詢", command=lambda: refresh_logs()).pack(side="left")
+
     columns = ("使用者", "動作", "檔案名稱", "時間")
     tree = ttk.Treeview(tab, columns=columns, show="headings")
     for col in columns:
@@ -91,15 +109,18 @@ def build_log_view_tab(tab, db_name, role):
     tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     def refresh_logs():
+        keyword = entry_query.get().strip()
         for row in tree.get_children():
             tree.delete(row)
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
-            cursor.execute(f"""
-                SELECT id, username, action, filename, timestamp 
-                FROM {LOG_TABLE} 
-                ORDER BY timestamp DESC
-            """)
+            base_sql = "SELECT id, username, action, filename, timestamp FROM activity_logs"
+            params = []
+            if keyword:
+                base_sql += " WHERE username LIKE ? OR action LIKE ? OR filename LIKE ?"
+                params = [f"%{keyword}%"] * 3
+            base_sql += f" ORDER BY timestamp {'DESC' if sort_desc.get() else 'ASC'}"
+            cursor.execute(base_sql, params)
             for row in cursor.fetchall():
                 tree.insert("", "end", iid=row[0], values=row[1:])
 
@@ -122,7 +143,6 @@ def build_log_view_tab(tab, db_name, role):
 
     button_frame = tk.Frame(tab)
     button_frame.pack(anchor="e", padx=10, pady=(0, 10))
-
     tk.Button(button_frame, text="重新整理", command=refresh_logs).pack(side="left", padx=5)
 
     if role == "admin":
@@ -135,7 +155,7 @@ def build_log_view_tab(tab, db_name, role):
                 with sqlite3.connect(db_name) as conn:
                     cursor = conn.cursor()
                     for iid in selected:
-                        cursor.execute(f"DELETE FROM {LOG_TABLE} WHERE id=?", (iid,))
+                        cursor.execute("DELETE FROM activity_logs WHERE id=?", (iid,))
                     conn.commit()
                 refresh_logs()
 
@@ -143,7 +163,7 @@ def build_log_view_tab(tab, db_name, role):
             if messagebox.askyesno("確認", "⚠️ 確定要刪除所有操作紀錄？此操作無法復原。"):
                 with sqlite3.connect(db_name) as conn:
                     cursor = conn.cursor()
-                    cursor.execute(f"DELETE FROM {LOG_TABLE}")
+                    cursor.execute("DELETE FROM activity_logs")
                     conn.commit()
                 refresh_logs()
 
@@ -202,6 +222,11 @@ def initialize_database():
 
         conn.commit()
 
+    print("✅ 資料庫初始化完成，實際位置：", DB_NAME)
+
+    if hasattr(os, "sync"):
+        os.sync()
+
     auto_add_missing_columns(DB_NAME, get_required_columns())
 
 def save_file(file_path, target_folder, username):
@@ -220,7 +245,7 @@ def save_file(file_path, target_folder, username):
 
 def update_sop_field(cursor, product_code, field_name, new_file_path):
     cursor.execute(f"UPDATE issues SET {field_name}=?, created_at=? WHERE product_code=?",
-                   (new_file_path, datetime.now().isoformat(), product_code))
+               (new_file_path, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), product_code))
 
 def handle_sop_update(product_code, sop_path, field_name, entry_widget, current_user):
     path = entry_widget.get().strip()
@@ -242,7 +267,7 @@ def create_sop_update_button(frame, row, label, sop_path, field_name, product_co
             return
         product_code = product_code_entry.get().strip()
         if not product_code:
-            messagebox.showwarning("警告", "請先輸入產品編號")
+            messagebox.showwarning("警告", "請先輸入料號")
             return
         updated_filename = handle_sop_update(product_code, sop_path, field_name, entry_widget, current_user)
         if updated_filename:
@@ -282,6 +307,7 @@ def create_main_interface(root, db_name, login_info):
 
     tabs = {
         "生產資訊": tk.Frame(notebook),
+        "SOP生成": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "SOP套用": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
@@ -305,7 +331,7 @@ def create_main_interface(root, db_name, login_info):
         form = tk.LabelFrame(frame, text="新增紀錄")
         form.pack(fill="x", padx=10, pady=5)
 
-        tk.Label(form, text="產品編號:").grid(row=0, column=0, sticky="e")
+        tk.Label(form, text="料號:").grid(row=0, column=0, sticky="e")
         entry_code = tk.Entry(form, width=50)
         entry_code.grid(row=0, column=1)
 
@@ -323,15 +349,15 @@ def create_main_interface(root, db_name, login_info):
             code = entry_code.get().strip()
             name = entry_name.get().strip()
 
-            if len(code) not in (8, 10, 12) or not code.isdigit():
-                messagebox.showerror("錯誤", "產品編號必須為 8/10/12 碼數字")
+            if len(code) not in (8, 12) or not code.isdigit():
+                messagebox.showerror("錯誤", "必須為 8/12 碼數字")
                 return
 
             with sqlite3.connect(db_name) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT product_code FROM issues WHERE product_code=?", (code,))
                 if cursor.fetchone():
-                    messagebox.showerror("錯誤", "產品編號已存在，請重新確認過。")
+                    messagebox.showerror("錯誤", "料號已存在，請重新確認過。")
                     return
 
                 d_path = save_file(entry_dip.get().strip(), DIP_SOP_PATH, current_user)
@@ -345,7 +371,7 @@ def create_main_interface(root, db_name, login_info):
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (code, name, os.path.join(DIP_SOP_PATH, d_path), os.path.join(ASSEMBLY_SOP_PATH, a_path),
                     os.path.join(TEST_SOP_PATH, t_path), os.path.join(PACKAGING_SOP_PATH, p_path),
-                    os.path.join(OQC_PATH, o_path), current_user, datetime.now().isoformat()))
+                    os.path.join(OQC_PATH, o_path), current_user, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
                 conn.commit()
 
             messagebox.showinfo("成功", "已新增紀錄")
@@ -370,7 +396,7 @@ def create_main_interface(root, db_name, login_info):
     tk.Button(query_frame, text="↕排序", command=toggle_sort).pack(side="left", padx=5)
     tk.Button(query_frame, text="查詢", command=lambda: query_data()).pack(side="left")
 
-    columns = ("產品編號", "品名", "DIP SOP", "組裝SOP", "測試SOP", "包裝SOP", "檢查表OQC", "使用者", "建立時間")
+    columns = ("料號", "品名", "DIP SOP", "組裝SOP", "測試SOP", "包裝SOP", "檢查表OQC", "使用者", "建立時間")
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
@@ -423,18 +449,18 @@ def create_main_interface(root, db_name, login_info):
                 if "&" in raw_input:
                     terms = [t.strip() for t in raw_input.split("&")]
                     for term in terms:
-                        conditions.append("(product_code LIKE ? OR product_name LIKE ?)")
+                        conditions.append("((product_code COLLATE NOCASE) LIKE ? OR (product_name COLLATE NOCASE) LIKE ?)")
                         params.extend([f"%{term}%", f"%{term}%"])
                     condition_sql = " AND ".join(conditions)
                 elif "/" in raw_input:
                     terms = [t.strip() for t in raw_input.split("/")]
                     sub_conditions = []
                     for term in terms:
-                        sub_conditions.append("(product_code LIKE ? OR product_name LIKE ?)")
+                        sub_conditions.append("((product_code COLLATE NOCASE) LIKE ? OR (product_name COLLATE NOCASE) LIKE ?)")
                         params.extend([f"%{term}%", f"%{term}%"])
                     condition_sql = " OR ".join(sub_conditions)
                 else:
-                    condition_sql = "(product_code LIKE ? OR product_name LIKE ?)"
+                    condition_sql = "((product_code COLLATE NOCASE) LIKE ? OR (product_name COLLATE NOCASE) LIKE ?)"
                     params = [f"%{raw_input}%", f"%{raw_input}%"]
 
                 final_query = f"{base_query} WHERE {condition_sql} ORDER BY created_at {'DESC' if sort_desc.get() else 'ASC'}"
@@ -447,7 +473,6 @@ def create_main_interface(root, db_name, login_info):
                 for i in range(2, 7):
                     row_display[i] = os.path.basename(row_display[i]) if row_display[i] else ""
                 tree.insert('', tk.END, values=row_display)
-
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -547,6 +572,8 @@ if __name__ == "__main__":
         top_bar.pack(fill="x", side="top")
         logout_btn = tk.Button(top_bar, text="登出並關閉", command=lambda: logout_and_exit(root), bg="orange")
         logout_btn.pack(side="right", padx=10, pady=5)
+        user_info = f"使用者：{login_info['user']}（{login_info['role']}）"
+        tk.Label(top_bar, text=user_info).pack(side="right", padx=10)
 
         main_frame = tk.Frame(root)
         main_frame.pack(fill="both", expand=True)

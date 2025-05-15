@@ -7,5 +7,5 @@ def log_activity(db_name, user, action, filename,):
         cursor.execute("""
             INSERT INTO activity_logs (username, action, filename, timestamp)
             VALUES (?, ?, ?, ?)
-        """, (user, action, filename, datetime.now().isoformat()))
+        """, (user, action, filename, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
         conn.commit()
