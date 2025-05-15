@@ -62,16 +62,6 @@ def logout_and_exit(root):
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-def log_activity(user, action, filename):
-    with sqlite3.connect(DB_NAME) as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
-        cursor = conn.cursor()
-        cursor.execute(f"""
-            INSERT INTO {LOG_TABLE} (username, action, filename, timestamp)
-            VALUES (?, ?, ?, ?)
-        """, (user, action, filename, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
-        conn.commit()
-
 def open_file(filepath):
     try:
         if sys.platform == "win32":
@@ -265,7 +255,7 @@ def save_file(file_path, target_folder, username):
     target_path = os.path.join(target_folder, filename)
     try:
         shutil.copy(file_path, target_path)
-        log_activity(username, "upload", filename)
+        log_activity(DB_NAME, username, "upload", filename, module="生產資訊")
         return filename
     except Exception as e:
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
@@ -442,12 +432,12 @@ def create_main_interface(root, db_name, login_info):
                 with sqlite3.connect(db_name) as conn:
                     cursor = conn.cursor()
                     for item in selected_items:
-                        product_code = tree.item(item)['values'][0]
+                        product_code = str(tree.item(item)['values'][0]).zfill(8)
                         cursor.execute("DELETE FROM issues WHERE product_code=?", (product_code,))
                         deleted_items.append(product_code)
                     conn.commit()
                 for code in deleted_items:
-                    log_activity(current_user, "delete", code)
+                    log_activity(DB_NAME, current_user, "delete", code, module="生產資訊")
 
                 query_data()
 
@@ -498,6 +488,7 @@ def create_main_interface(root, db_name, login_info):
             cursor.execute(final_query, params)
             for row in cursor.fetchall():
                 row_display = list(row)
+                row_display[0] = str(row_display[0]).zfill(8)
                 for i in range(2, 7):
                     row_display[i] = os.path.basename(row_display[i]) if row_display[i] else ""
                 tree.insert('', tk.END, values=row_display)
@@ -508,7 +499,7 @@ def create_main_interface(root, db_name, login_info):
         if not item or not col:
             return
         col_index = int(col[1:]) - 1
-        if col_index in range(2, 7):  # 支援 DIP SOP + 4種
+        if col_index in range(2, 7):  
             filename = tree.item(item)['values'][col_index]
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
             full_path = os.path.join(base_paths[col_index - 2], filename)
@@ -584,7 +575,7 @@ def login():
     login_window.title("登入系統")
     login_window.geometry("300x180")
     try:
-        login_window.iconbitmap("Ted64.ico")
+        login_window.iconbitmap("info.ico")
     except:
         pass
     tk.Label(login_window, text="使用者名稱：").pack(pady=(15, 5))
@@ -613,7 +604,7 @@ if __name__ == "__main__":
         root.title("生產資訊平台")
         root.geometry("1000x750")
         try:
-            root.iconbitmap("Ted64.ico")
+            root.iconbitmap("info.ico")
         except:
             pass
         import tkinter.font as tkFont

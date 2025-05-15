@@ -133,7 +133,7 @@ def build_user_management_tab(tab, db_name, current_user):
             conn.commit()
 
         messagebox.showinfo("成功", "使用者已新增")
-        log_activity(db_name, current_user, "add_user", new_user)
+        log_activity(db_name, current_user, "add_user", new_user, module="帳號管理")
 
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)

@@ -2,7 +2,7 @@ import sqlite3
 
 def get_required_columns():
     return {
-        "logs_activity": {
+        "activity_logs": {
             "product_code": "TEXT",
             "module": "TEXT"
         },
