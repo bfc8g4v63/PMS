@@ -112,13 +112,32 @@ def build_log_view_tab(tab, db_name, role):
         keyword = entry_query.get().strip()
         for row in tree.get_children():
             tree.delete(row)
+
+        restricted_roles = ("engineer", "leader")
+        restricted_keywords = ("add_user", "update_user", "delete_user")
+
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
             base_sql = "SELECT id, username, action, filename, timestamp FROM activity_logs"
             params = []
-            if keyword:
-                base_sql += " WHERE username LIKE ? OR action LIKE ? OR filename LIKE ?"
-                params = [f"%{keyword}%"] * 3
+
+            if role in restricted_roles:
+
+                if keyword:
+                    base_sql += " WHERE (username LIKE ? OR action LIKE ? OR filename LIKE ?) AND action NOT IN ({})".format(
+                        ",".join("?" for _ in restricted_keywords)
+                    )
+                    params = [f"%{keyword}%"] * 3 + list(restricted_keywords)
+                else:
+                    base_sql += " WHERE action NOT IN ({})".format(
+                        ",".join("?" for _ in restricted_keywords)
+                    )
+                    params = list(restricted_keywords)
+            else:
+                if keyword:
+                    base_sql += " WHERE username LIKE ? OR action LIKE ? OR filename LIKE ?"
+                    params = [f"%{keyword}%"] * 3
+
             base_sql += f" ORDER BY timestamp {'DESC' if sort_desc.get() else 'ASC'}"
             cursor.execute(base_sql, params)
             for row in cursor.fetchall():
@@ -209,6 +228,16 @@ def initialize_database():
                 action TEXT,
                 filename TEXT,
                 timestamp TEXT
+            )
+        """)
+        
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS dev_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT,
+                content TEXT,
+                updated_at TEXT,
+                created_by TEXT
             )
         """)
 
@@ -312,7 +341,7 @@ def create_main_interface(root, db_name, login_info):
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
-        "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer") else None
+        "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
 
     }
 
@@ -320,7 +349,7 @@ def create_main_interface(root, db_name, login_info):
         if frame:
             notebook.add(frame, text=name)
 
-    if current_role in ("admin", "engineer"):
+    if current_role in ("admin", "engineer", "leader"):
         build_log_view_tab(tabs["操作紀錄"], db_name, current_role)
 
     if current_role == "admin":
