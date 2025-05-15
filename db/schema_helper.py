@@ -2,11 +2,17 @@ import sqlite3
 
 def get_required_columns():
     return {
-        "activity_logs": {
-            "product_code": "TEXT"
+        "logs_activity": {
+            "product_code": "TEXT",
+            "module": "TEXT"
         },
         "users": {
-            "specialty": "TEXT"
+            "specialty": "TEXT",
+            "can_view_logs": "INTEGER DEFAULT 0",
+            "can_delete_logs": "INTEGER DEFAULT 0",
+            "can_upload_sop": "INTEGER DEFAULT 0",
+            "can_view_issues": "INTEGER DEFAULT 0",
+            "can_manage_users": "INTEGER DEFAULT 0"
         },
         "issues": {
             "assembly_sop": "TEXT",
@@ -22,6 +28,8 @@ def auto_add_missing_columns(db_path, schema_map):
         for table, columns in schema_map.items():
             cursor.execute(f"PRAGMA table_info({table})")
             existing = [row[1] for row in cursor.fetchall()]
+            print(f"🔍 資料表 {table} 現有欄位: {existing}")
+
             for col_name, col_type in columns.items():
                 if col_name not in existing:
                     try:

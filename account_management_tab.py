@@ -5,6 +5,17 @@ import hashlib
 from utils import log_activity
 
 def build_user_management_tab(tab, db_name, current_user):
+    PERMISSION_FLAGS = {
+        "can_add": {"label": "可新增", "default": 1},
+        "can_delete": {"label": "可刪除", "default": 0},
+        "active": {"label": "啟用", "default": 1},
+        "can_view_logs": {"label": "可見操作紀錄", "default": 1},
+        "can_delete_logs": {"label": "可刪除操作紀錄", "default": 0},
+        "can_upload_sop": {"label": "可上傳SOP", "default": 1},
+        "can_view_issues": {"label": "可見生產資訊", "default": 1},
+        "can_manage_users": {"label": "可管理帳號", "default": 0}
+    }
+
     frame = tk.Frame(tab)
     frame.pack(fill="both", expand=True, padx=10, pady=10)
     tk.Label(frame, text="帳號管理").pack(anchor="w")
@@ -74,13 +85,17 @@ def build_user_management_tab(tab, db_name, current_user):
         values=["", "dip", "assembly", "test", "packaging", "oqc"], width=15, state="readonly")
     specialty_combo.grid(row=2, column=3, sticky="w", padx=5)
 
-    add_var = tk.IntVar(value=1)
-    delete_var = tk.IntVar(value=0)
-    active_var = tk.IntVar(value=1)
-
-    tk.Checkbutton(form, text="可新增", variable=add_var).grid(row=3, column=0, sticky="w", padx=5, pady=5)
-    tk.Checkbutton(form, text="可刪除", variable=delete_var).grid(row=3, column=1, sticky="w", padx=5)
-    tk.Checkbutton(form, text="啟用", variable=active_var).grid(row=3, column=2, sticky="w", padx=5)
+    permission_vars = {}
+    row = 3
+    col = 0
+    for key, perm in PERMISSION_FLAGS.items():
+        var = tk.IntVar(value=perm["default"])
+        permission_vars[key] = var
+        tk.Checkbutton(form, text=perm["label"], variable=var).grid(row=row, column=col, sticky="w", padx=5, pady=5)
+        col += 1
+        if col > 3:
+            col = 0
+            row += 1
 
     def hash_password(password):
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
@@ -89,9 +104,11 @@ def build_user_management_tab(tab, db_name, current_user):
         new_user = entry_user.get().strip()
         new_pw = entry_pass.get().strip()
         role = role_var.get()
-        can_add = add_var.get()
-        can_delete = delete_var.get()
-        active = active_var.get()
+
+        permissions = {k: v.get() for k, v in permission_vars.items()}
+        can_add = permissions["can_add"]
+        can_delete = permissions["can_delete"]
+        active = permissions["active"]
 
         if not new_user or not new_pw:
             messagebox.showwarning("警告", "請填寫帳號與密碼")
@@ -99,6 +116,7 @@ def build_user_management_tab(tab, db_name, current_user):
         if not role:
             messagebox.showwarning("警告", "請選擇角色")
             return
+
         hashed_pw = hash_password(new_pw)
 
         with sqlite3.connect(db_name) as conn:
@@ -116,15 +134,18 @@ def build_user_management_tab(tab, db_name, current_user):
 
         messagebox.showinfo("成功", "使用者已新增")
         log_activity(db_name, current_user, "add_user", new_user)
+
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)
-        specialty_var.set("") 
+        specialty_var.set("")
+        for v in permission_vars.values():
+            v.set(0)
         refresh_users()
 
     tk.Button(form, text="新增使用者", command=add_user, bg="lightblue").grid(row=5, column=1, pady=10)
 
     edit_frame = tk.LabelFrame(frame, text="修改權限 / 狀態 / 帳號名稱")
-    edit_frame.pack(fill="x", pady=10)
+    edit_frame.pack(fill="x", pady=8)
 
     tk.Label(edit_frame, text="新帳號:").grid(row=0, column=0)
     entry_edit_user = tk.Entry(edit_frame)
@@ -139,34 +160,37 @@ def build_user_management_tab(tab, db_name, current_user):
     combo_role = ttk.Combobox(edit_frame, textvariable=role_edit, values=["admin", "engineer", "leader"], state="readonly")
     combo_role.grid(row=2, column=1)
 
-    edit_add = tk.IntVar()
-    edit_delete = tk.IntVar()
-    edit_active = tk.IntVar()
-    tk.Checkbutton(edit_frame, text="可新增", variable=edit_add).grid(row=3, column=0, sticky="w", padx=5)
-    tk.Checkbutton(edit_frame, text="可刪除", variable=edit_delete).grid(row=3, column=1, sticky="w", padx=5)
-    tk.Checkbutton(edit_frame, text="啟用", variable=edit_active).grid(row=3, column=2, sticky="w", padx=5)
-    tk.Label(edit_frame, text="專長:").grid(row=4, column=0)
     edit_specialty = tk.StringVar()
-    combo_specialty = ttk.Combobox(edit_frame, textvariable=edit_specialty, values=["", "dip", "assembly", "test", "packaging", "oqc"], state="readonly", width=15)
-    combo_specialty.grid(row=4, column=1)
+    tk.Label(edit_frame, text="專長:").grid(row=3, column=0)
+    combo_specialty = ttk.Combobox(edit_frame, textvariable=edit_specialty, values=["", "dip", "assembly", "test", "packaging", "oqc"], state="readonly")
+    combo_specialty.grid(row=3, column=1)
 
     def on_select_user(event):
         selected = tree.selection()
         if not selected:
             return
         item = tree.item(selected[0])["values"]
+        username = item[0]
+
         entry_edit_user.delete(0, tk.END)
-        entry_edit_user.insert(0, item[0])
+        entry_edit_user.insert(0, username)
         role_edit.set(item[1])
-        edit_add.set(item[2])
-        edit_delete.set(item[3])
-        edit_active.set(item[4])
+
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT specialty FROM users WHERE username=?", (item[0],))
+
+            cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
             specialty = cursor.fetchone()
             edit_specialty.set(specialty[0] if specialty else "")
 
+            cursor.execute(f"""
+                SELECT {', '.join(permission_vars.keys())}
+                FROM users WHERE username=?
+            """, (username,))
+            result = cursor.fetchone()
+            if result:
+                for i, key in enumerate(permission_vars):
+                    permission_vars[key].set(result[i])
 
     tree.bind("<<TreeviewSelect>>", on_select_user)
 
@@ -183,6 +207,11 @@ def build_user_management_tab(tab, db_name, current_user):
         new_username = entry_edit_user.get().strip()
         new_pass = entry_edit_pass.get().strip()
 
+        permissions = {k: v.get() for k, v in permission_vars.items()}
+        can_add = permissions["can_add"]
+        can_delete = permissions["can_delete"]
+        active = permissions["active"]
+
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
             if new_username and new_username != original_username:
@@ -198,12 +227,12 @@ def build_user_management_tab(tab, db_name, current_user):
                 cursor.execute("""
                     UPDATE users SET password=?, role=?, can_add=?, can_delete=?, active=?, specialty=?
                     WHERE username=?
-                """, (hashed_pw, role_edit.get(), edit_add.get(), edit_delete.get(), edit_active.get(), edit_specialty.get(), original_username))
+                """, (hashed_pw, role_edit.get(), can_add, can_delete, active, edit_specialty.get(), original_username))
             else:
                 cursor.execute("""
                     UPDATE users SET role=?, can_add=?, can_delete=?, active=?, specialty=?
                     WHERE username=?
-                """, (role_edit.get(), edit_add.get(), edit_delete.get(), edit_active.get(), edit_specialty.get(), original_username))
+                """, (role_edit.get(), can_add, can_delete, active, edit_specialty.get(), original_username))
             conn.commit()
 
         messagebox.showinfo("成功", "已更新")
@@ -229,9 +258,10 @@ def build_user_management_tab(tab, db_name, current_user):
             messagebox.showinfo("成功", "使用者已刪除")
             log_activity(db_name, current_user, "delete_user", username)
             refresh_users()
+
     tk.Button(edit_frame, text="更新權限", command=update_user).grid(row=5, column=1, pady=5)
     tk.Button(edit_frame, text="刪除帳號", command=delete_user, bg="lightcoral", fg="white")\
-    .grid(row=5, column=2, padx=10, pady=5)
+        .grid(row=5, column=2, padx=10, pady=5)
 
     refresh_users()
     return tree, refresh_users

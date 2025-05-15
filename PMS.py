@@ -230,7 +230,6 @@ def initialize_database():
                 timestamp TEXT
             )
         """)
-        
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS dev_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -531,7 +530,18 @@ def create_main_interface(root, db_name, login_info):
     tree.bind("<Control-c>", on_copy)
 
 def login():
-    result = {"user": None, "role": None, "can_add": 0, "can_delete": 0}
+    result = {
+        "user": None,
+        "role": None,
+        "can_add": 0,
+        "can_delete": 0,
+        "specialty": "",
+        "can_view_logs": 0,
+        "can_delete_logs": 0,
+        "can_upload_sop": 0,
+        "can_view_issues": 0,
+        "can_manage_users": 0
+    }
 
     def try_login():
         u = entry_user.get().strip()
@@ -545,14 +555,27 @@ def login():
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             c = conn.cursor()
-            c.execute("SELECT role, can_add, can_delete, specialty FROM users WHERE username=? AND password=? AND active=1", (u, hashed_pw))
+            c.execute("""
+                SELECT role, can_add, can_delete, specialty,
+                       can_view_logs, can_delete_logs, can_upload_sop,
+                       can_view_issues, can_manage_users
+                FROM users
+                WHERE username=? AND password=? AND active=1
+            """, (u, hashed_pw))
             r = c.fetchone()
             if r:
-                result["user"] = u
-                result["role"] = r[0]
-                result["can_add"] = r[1]
-                result["can_delete"] = r[2]
-                result["specialty"] = r[3]
+                result.update({
+                    "user": u,
+                    "role": r[0],
+                    "can_add": r[1],
+                    "can_delete": r[2],
+                    "specialty": r[3],
+                    "can_view_logs": r[4],
+                    "can_delete_logs": r[5],
+                    "can_upload_sop": r[6],
+                    "can_view_issues": r[7],
+                    "can_manage_users": r[8]
+                })
                 login_window.destroy()
             else:
                 messagebox.showerror("錯誤", "帳號或密碼錯誤或帳號已停用")
