@@ -424,7 +424,6 @@ def create_main_interface(root, db_name, login_info):
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
-        "變更密碼": tk.Frame(notebook),
         "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
 
     }
@@ -432,9 +431,6 @@ def create_main_interface(root, db_name, login_info):
     for name, frame in tabs.items():
         if frame:
             notebook.add(frame, text=name)
-
-    if tabs["變更密碼"]:
-        build_password_change_tab(tabs["變更密碼"], db_name, current_user)
 
     if current_role in ("admin", "engineer", "leader"):
         build_log_view_tab(tabs["操作紀錄"], db_name, current_role)
@@ -692,6 +688,56 @@ def login():
 
     return result
 
+def open_password_change_window(parent, db_name, username):
+    win = tk.Toplevel(parent)
+    win.title("變更密碼")
+    win.geometry("300x220")
+    win.iconbitmap("info.ico")
+    win.resizable(False, False)
+
+    tk.Label(win, text="舊密碼：").pack(pady=(10, 0))
+    entry_old = tk.Entry(win, show="*")
+    entry_old.pack()
+
+    tk.Label(win, text="新密碼：").pack(pady=(10, 0))
+    entry_new = tk.Entry(win, show="*")
+    entry_new.pack()
+
+    tk.Label(win, text="確認新密碼：").pack(pady=(10, 0))
+    entry_confirm = tk.Entry(win, show="*")
+    entry_confirm.pack()
+
+    def confirm_change():
+        old_pw = entry_old.get().strip()
+        new_pw = entry_new.get().strip()
+        confirm_pw = entry_confirm.get().strip()
+
+        if not old_pw or not new_pw or not confirm_pw:
+            messagebox.showwarning("警告", "請填寫所有欄位")
+            return
+
+        if new_pw != confirm_pw:
+            messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
+            return
+
+        old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
+        new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+
+        with sqlite3.connect(db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (username, old_hash))
+            if not cursor.fetchone():
+                messagebox.showerror("錯誤", "舊密碼不正確")
+                return
+
+            cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, username))
+            conn.commit()
+
+        messagebox.showinfo("成功", "密碼已變更")
+        win.destroy()
+
+    tk.Button(win, text="變更密碼", bg="lightgreen", command=confirm_change).pack(pady=15)
+
 if __name__ == "__main__":
     init_db()
     initialize_database()
@@ -713,6 +759,9 @@ if __name__ == "__main__":
         top_bar.pack(fill="x", side="top")
         logout_btn = tk.Button(top_bar, text="登出並關閉", command=lambda: logout_and_exit(root), bg="orange")
         logout_btn.pack(side="right", padx=10, pady=5)
+        change_pw_btn = tk.Button(top_bar, text="變更密碼", bg="lightgreen",
+            command=lambda: open_password_change_window(root, DB_NAME, login_info["user"]))
+        change_pw_btn.pack(side="right", padx=10, pady=(0, 0))        
         user_info = f"使用者：{login_info['user']}（{login_info['role']}）"
         tk.Label(top_bar, text=user_info).pack(side="right", padx=10)
 

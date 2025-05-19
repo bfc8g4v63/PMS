@@ -13,7 +13,7 @@ def build_user_management_tab(tab, db_name, current_user):
         "can_delete_logs": {"label": "刪除操作紀錄", "default": 0},
         "can_upload_sop": {"label": "上傳SOP", "default": 1},
         "can_view_issues": {"label": "可見生產資訊", "default": 1},
-        "can_manage_users": {"label": "管理帳號", "default": 0}
+        "can_manage_users": {"label": "帳號管理", "default": 0}
     }
 
     frame = tk.Frame(tab)
@@ -35,7 +35,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Button(control_frame, text="↕排序帳號", command=toggle_sort).pack(side="left")
 
-    columns = ("帳號", "角色", "新增", "刪除", "啟用")
+    columns = ("帳號", "角色", "新增", "刪除", "啟用", "上傳SOP", "可見紀錄", "刪紀錄", "可見生產", "帳號管理")
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
@@ -47,7 +47,9 @@ def build_user_management_tab(tab, db_name, current_user):
             tree.delete(row)
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
-            sql = "SELECT username, role, can_add, can_delete, active FROM users"
+            sql = """SELECT username, role, can_add, can_delete, active,
+                can_upload_sop, can_view_logs, can_delete_logs,
+                can_view_issues, can_manage_users FROM users"""
             condition = filter_var.get()
             if condition == "僅啟用":
                 sql += " WHERE active=1"
@@ -57,7 +59,12 @@ def build_user_management_tab(tab, db_name, current_user):
             cursor.execute(sql)
             for row in cursor.fetchall():
                 tags = ("disabled",) if row[4] == 0 else ()
-                tree.insert("", "end", values=row, tags=tags)
+                display_row = [
+                    row[0],
+                    row[1],
+                    *["✓" if v else "✕" for v in row[2:]]
+                ]
+                tree.insert("", "end", values=display_row, tags=tags)
 
         tree.tag_configure("disabled", foreground="gray")
 
@@ -199,6 +206,7 @@ def build_user_management_tab(tab, db_name, current_user):
         if not selected:
             messagebox.showwarning("未選擇", "請選擇帳號")
             return
+
         original_username = tree.item(selected[0])["values"][0]
         if original_username == current_user:
             messagebox.showerror("錯誤", "無法修改當前登入帳號")
@@ -206,14 +214,14 @@ def build_user_management_tab(tab, db_name, current_user):
 
         new_username = entry_edit_user.get().strip()
         new_pass = entry_edit_pass.get().strip()
+        role = role_edit.get()
+        specialty = edit_specialty.get()
 
         permissions = {k: v.get() for k, v in permission_vars.items()}
-        can_add = permissions["can_add"]
-        can_delete = permissions["can_delete"]
-        active = permissions["active"]
 
         with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
+
             if new_username and new_username != original_username:
                 cursor.execute("SELECT username FROM users WHERE username=?", (new_username,))
                 if cursor.fetchone():
@@ -225,14 +233,33 @@ def build_user_management_tab(tab, db_name, current_user):
             if new_pass:
                 hashed_pw = hash_password(new_pass)
                 cursor.execute("""
-                    UPDATE users SET password=?, role=?, can_add=?, can_delete=?, active=?, specialty=?
+                    UPDATE users SET password=?, role=?, specialty=?,
+                        can_add=?, can_delete=?, active=?,
+                        can_view_logs=?, can_delete_logs=?, can_upload_sop=?,
+                        can_view_issues=?, can_manage_users=?
                     WHERE username=?
-                """, (hashed_pw, role_edit.get(), can_add, can_delete, active, edit_specialty.get(), original_username))
+                """, (
+                    hashed_pw, role, specialty,
+                    permissions["can_add"], permissions["can_delete"], permissions["active"],
+                    permissions["can_view_logs"], permissions["can_delete_logs"], permissions["can_upload_sop"],
+                    permissions["can_view_issues"], permissions["can_manage_users"],
+                    original_username
+                ))
             else:
                 cursor.execute("""
-                    UPDATE users SET role=?, can_add=?, can_delete=?, active=?, specialty=?
+                    UPDATE users SET role=?, specialty=?,
+                        can_add=?, can_delete=?, active=?,
+                        can_view_logs=?, can_delete_logs=?, can_upload_sop=?,
+                        can_view_issues=?, can_manage_users=?
                     WHERE username=?
-                """, (role_edit.get(), can_add, can_delete, active, edit_specialty.get(), original_username))
+                """, (
+                    role, specialty,
+                    permissions["can_add"], permissions["can_delete"], permissions["active"],
+                    permissions["can_view_logs"], permissions["can_delete_logs"], permissions["can_upload_sop"],
+                    permissions["can_view_issues"], permissions["can_manage_users"],
+                    original_username
+                ))
+
             conn.commit()
 
         messagebox.showinfo("成功", "已更新")
