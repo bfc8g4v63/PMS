@@ -230,14 +230,6 @@ def initialize_database():
             )
         """)
 
-        cursor.execute("SELECT COUNT(*) FROM users WHERE username='Nelson'")
-        if cursor.fetchone()[0] == 0:
-            hashed_pw = hash_password("8463")
-            cursor.execute("""
-                INSERT INTO users (username, password, role, can_add, can_delete, active, specialty)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, ("Nelson", hashed_pw, "admin", 1, 1, 1, ""))
-
         conn.commit()
 
     print("✅ 資料庫初始化完成，實際位置：", DB_NAME)
@@ -314,6 +306,108 @@ def create_upload_field_with_update(row, label, folder, field_name, form, produc
 
     return entry
 
+def build_password_change_tab(tab, db_name, current_user):
+    tk.Label(tab, text="變更密碼", font=("Microsoft JhengHei", 12, "bold")).pack(pady=(10, 5))
+
+    form = tk.Frame(tab)
+    form.pack(pady=10)
+
+    tk.Label(form, text="舊密碼：").grid(row=0, column=0, sticky="e", pady=5)
+    old_pass_entry = tk.Entry(form, show="*", width=30)
+    old_pass_entry.grid(row=0, column=1, padx=10)
+
+    tk.Label(form, text="新密碼：").grid(row=1, column=0, sticky="e", pady=5)
+    new_pass_entry = tk.Entry(form, show="*", width=30)
+    new_pass_entry.grid(row=1, column=1, padx=10)
+
+    tk.Label(form, text="確認新密碼：").grid(row=2, column=0, sticky="e", pady=5)
+    confirm_pass_entry = tk.Entry(form, show="*", width=30)
+    confirm_pass_entry.grid(row=2, column=1, padx=10)
+
+    def change_password():
+        old_pw = old_pass_entry.get().strip()
+        new_pw = new_pass_entry.get().strip()
+        confirm_pw = confirm_pass_entry.get().strip()
+
+        if not old_pw or not new_pw or not confirm_pw:
+            messagebox.showwarning("警告", "請填寫所有欄位")
+            return
+
+        if new_pw != confirm_pw:
+            messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
+            return
+
+        old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
+        new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+
+        with sqlite3.connect(db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
+            if not cursor.fetchone():
+                messagebox.showerror("錯誤", "舊密碼不正確")
+                return
+
+            cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, current_user))
+            conn.commit()
+
+        messagebox.showinfo("成功", "密碼已變更")
+        old_pass_entry.delete(0, tk.END)
+        new_pass_entry.delete(0, tk.END)
+        confirm_pass_entry.delete(0, tk.END)
+
+    tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
+
+def build_password_change_tab(tab, db_name, current_user):
+    tk.Label(tab, text="變更密碼", font=("Microsoft JhengHei", 12, "bold")).pack(pady=(10, 5))
+
+    form = tk.Frame(tab)
+    form.pack(pady=10)
+
+    tk.Label(form, text="舊密碼：").grid(row=0, column=0, sticky="e", pady=5)
+    old_pass_entry = tk.Entry(form, show="*", width=30)
+    old_pass_entry.grid(row=0, column=1, padx=10)
+
+    tk.Label(form, text="新密碼：").grid(row=1, column=0, sticky="e", pady=5)
+    new_pass_entry = tk.Entry(form, show="*", width=30)
+    new_pass_entry.grid(row=1, column=1, padx=10)
+
+    tk.Label(form, text="確認新密碼：").grid(row=2, column=0, sticky="e", pady=5)
+    confirm_pass_entry = tk.Entry(form, show="*", width=30)
+    confirm_pass_entry.grid(row=2, column=1, padx=10)
+
+    def change_password():
+        old_pw = old_pass_entry.get().strip()
+        new_pw = new_pass_entry.get().strip()
+        confirm_pw = confirm_pass_entry.get().strip()
+
+        if not old_pw or not new_pw or not confirm_pw:
+            messagebox.showwarning("警告", "請填寫所有欄位")
+            return
+
+        if new_pw != confirm_pw:
+            messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
+            return
+
+        old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
+        new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+
+        with sqlite3.connect(db_name) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
+            if not cursor.fetchone():
+                messagebox.showerror("錯誤", "舊密碼不正確")
+                return
+
+            cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, current_user))
+            conn.commit()
+
+        messagebox.showinfo("成功", "密碼已變更")
+        old_pass_entry.delete(0, tk.END)
+        new_pass_entry.delete(0, tk.END)
+        confirm_pass_entry.delete(0, tk.END)
+
+    tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
+
 def create_main_interface(root, db_name, login_info):
     current_user = login_info['user']
     current_role = login_info['role']
@@ -330,6 +424,7 @@ def create_main_interface(root, db_name, login_info):
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
+        "變更密碼": tk.Frame(notebook),
         "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
 
     }
@@ -337,6 +432,9 @@ def create_main_interface(root, db_name, login_info):
     for name, frame in tabs.items():
         if frame:
             notebook.add(frame, text=name)
+
+    if tabs["變更密碼"]:
+        build_password_change_tab(tabs["變更密碼"], db_name, current_user)
 
     if current_role in ("admin", "engineer", "leader"):
         build_log_view_tab(tabs["操作紀錄"], db_name, current_role)

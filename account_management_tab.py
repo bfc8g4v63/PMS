@@ -6,14 +6,14 @@ from utils import log_activity
 
 def build_user_management_tab(tab, db_name, current_user):
     PERMISSION_FLAGS = {
-        "can_add": {"label": "可新增", "default": 1},
-        "can_delete": {"label": "可刪除", "default": 0},
+        "can_add": {"label": "新增", "default": 1},
+        "can_delete": {"label": "刪除", "default": 0},
         "active": {"label": "啟用", "default": 1},
         "can_view_logs": {"label": "可見操作紀錄", "default": 1},
-        "can_delete_logs": {"label": "可刪除操作紀錄", "default": 0},
-        "can_upload_sop": {"label": "可上傳SOP", "default": 1},
+        "can_delete_logs": {"label": "刪除操作紀錄", "default": 0},
+        "can_upload_sop": {"label": "上傳SOP", "default": 1},
         "can_view_issues": {"label": "可見生產資訊", "default": 1},
-        "can_manage_users": {"label": "可管理帳號", "default": 0}
+        "can_manage_users": {"label": "管理帳號", "default": 0}
     }
 
     frame = tk.Frame(tab)
@@ -35,7 +35,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Button(control_frame, text="↕排序帳號", command=toggle_sort).pack(side="left")
 
-    columns = ("帳號", "角色", "可新增", "可刪除", "啟用")
+    columns = ("帳號", "角色", "新增", "刪除", "啟用")
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
