@@ -28,12 +28,12 @@ def auto_add_missing_columns(db_path, schema_map):
         for table, columns in schema_map.items():
             cursor.execute(f"PRAGMA table_info({table})")
             existing = [row[1] for row in cursor.fetchall()]
-            print(f"🔍 資料表 {table} 現有欄位: {existing}")
+            print(f"資料表 {table} 現有欄位: {existing}")
 
             for col_name, col_type in columns.items():
                 if col_name not in existing:
                     try:
                         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
-                        print(f"✅ 已新增欄位 {col_name} 到資料表 {table}")
+                        print(f"已新增欄位 {col_name} 到資料表 {table}")
                     except sqlite3.OperationalError as e:
-                        print(f"⚠️ 欄位新增失敗 {col_name}@{table}: {e}")
+                        print(f"欄位新增失敗 {col_name}@{table}: {e}")

@@ -10,10 +10,8 @@ import sys
 import tempfile
 from utils import log_activity
 from db.schema_helper import auto_add_missing_columns, get_required_columns
-
-
-
 from account_management_tab import build_user_management_tab
+from sop_build_tab import build_sop_upload_tab
 
 # 設定原始資料庫與本機暫存資料庫位置
 ORIGINAL_DB = os.path.join(os.path.dirname(__file__), "PMS.db")
@@ -40,13 +38,13 @@ def init_db():
 
 def sync_back_to_server():
     if DB_NAME == ORIGINAL_DB:
-        print("✅ 無需回寫資料庫，因為 DB 實體與操作一致")
+        print("無需回寫資料庫，因為 DB 實體與操作一致")
         return
     try:
         shutil.copy(DB_NAME, ORIGINAL_DB)
-        print("✅ 已同步本機資料庫回網路磁碟")
+        print("已同步本機資料庫回網路磁碟")
     except Exception as e:
-        print(f"⚠️ 資料回寫失敗: {e}")
+        print(f"資料回寫失敗: {e}")
 
 def logout_and_exit(root):
     try:
@@ -169,7 +167,7 @@ def build_log_view_tab(tab, db_name, role):
                 refresh_logs()
 
         def delete_all_logs():
-            if messagebox.askyesno("確認", "⚠️ 確定要刪除所有操作紀錄？此操作無法復原。"):
+            if messagebox.askyesno("確認", "確定要刪除所有操作紀錄？此操作無法復原。"):
                 with sqlite3.connect(db_name) as conn:
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM activity_logs")
@@ -232,7 +230,7 @@ def initialize_database():
 
         conn.commit()
 
-    print("✅ 資料庫初始化完成，實際位置：", DB_NAME)
+    print("資料庫初始化完成，實際位置：", DB_NAME)
 
     if hasattr(os, "sync"):
         os.sync()
@@ -420,7 +418,6 @@ def create_main_interface(root, db_name, login_info):
     tabs = {
         "生產資訊": tk.Frame(notebook),
         "SOP生成": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
-        "SOP套用": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
@@ -431,6 +428,9 @@ def create_main_interface(root, db_name, login_info):
     for name, frame in tabs.items():
         if frame:
             notebook.add(frame, text=name)
+
+    if current_role in ("admin", "engineer"):
+        build_sop_upload_tab(tabs["SOP生成"], login_info)
 
     if current_role in ("admin", "engineer", "leader"):
         build_log_view_tab(tabs["操作紀錄"], db_name, current_role)
@@ -775,4 +775,4 @@ if __name__ == "__main__":
 
         root.mainloop()
     else:
-        print("⚠️ 使用者未登入或登入失敗，系統結束。")
+        print("使用者未登入或登入失敗，系統結束。")
