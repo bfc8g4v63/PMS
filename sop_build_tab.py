@@ -2,10 +2,12 @@ import tkinter as tk
 import threading
 import shutil
 import os
+import sqlite3
 from tkinter import filedialog, messagebox, ttk
 import fitz
 from datetime import datetime
-from utils import log_activity
+from utils import log_activity #, open_file
+
 
 UPLOAD_PATHS = {
     "dip": r"\\192.120.100.177\工程部\生產管理\SOP生成\DIP",
@@ -246,7 +248,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
                 merged_pdf.close()
 
                 log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP\n{save_path}"))
+                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))#\n{save_path}
 
                 if skipped:
                     skipped_str = "\n".join(skipped)
@@ -270,4 +272,161 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     status_var = tk.StringVar(value="等待操作")
     status_label = tk.Label(left, textvariable=status_var, fg="blue")
     status_label.pack(anchor="w", pady=2)
-    tk.Label(right, text="預留 SOP 套用區（待建置）", fg="gray").pack(anchor="nw", padx=10, pady=20) 
+
+def build_sop_apply_section(parent_frame, current_user, db_name):
+    role = current_user.get("role", "")
+    specialty = current_user.get("specialty", "").lower()
+    allow_all = role == "admin"
+
+    tk.Label(parent_frame, text="SOP 套用區", font=("Microsoft JhengHei", 12, "bold")).pack(anchor="nw", padx=10, pady=(10, 5))
+
+    search_frame = tk.Frame(parent_frame)
+    search_frame.pack(anchor="nw", padx=10, pady=5)
+    entry_apply_search = tk.Entry(search_frame, width=30)
+    entry_apply_search.pack(side="left")
+
+    dest_path_var = tk.StringVar(value=specialty)
+    if allow_all:
+        tk.Label(search_frame, text="選擇上傳分類：").pack(side="left", padx=5)
+        dropdown = ttk.Combobox(search_frame, textvariable=dest_path_var, values=list(SOP_SAVE_PATHS.keys()), state="readonly", width=10)
+        dropdown.pack(side="left")
+
+    tk.Button(search_frame, text="搜尋", command=lambda: search_apply_files()).pack(side="left", padx=5)
+
+    tk.Label(parent_frame, text="母資料").pack(anchor="nw", padx=10)
+    main_listbox = tk.Listbox(parent_frame, width=60, height=1)
+    main_listbox.pack(anchor="nw", padx=10)
+
+    tk.Label(parent_frame, text="子資料清單").pack(anchor="nw", padx=10, pady=(10, 0))
+
+    sub_list_frame = tk.Frame(parent_frame)
+    sub_list_frame.pack(anchor="nw", padx=10)
+    sub_items = []
+    sub_checks = []
+
+    canvas = tk.Canvas(sub_list_frame, width=400, height=200)
+    scrollbar = tk.Scrollbar(sub_list_frame, orient="vertical", command=canvas.yview)
+    scroll_frame = tk.Frame(canvas)
+    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
+    canvas.configure(yscrollcommand=scrollbar.set)
+    canvas.pack(side="left")
+    scrollbar.pack(side="right", fill="y")
+
+    def search_apply_files():
+        keyword = entry_apply_search.get().strip().lower()
+        for widget in scroll_frame.winfo_children():
+            widget.destroy()
+        sub_items.clear()
+        sub_checks.clear()
+
+        selected_key = dest_path_var.get()
+        search_path = SOP_SAVE_PATHS.get(selected_key)
+        if not search_path:
+            messagebox.showerror("錯誤", f"無法決定 {selected_key} 對應的路徑")
+            return
+
+        files = []
+        if os.path.isdir(search_path):
+            files = [os.path.join(search_path, f) for f in os.listdir(search_path) if keyword in f.lower() and f.lower().endswith(".pdf")]
+
+        for f in files:
+            var = tk.BooleanVar()
+            chk = tk.Checkbutton(scroll_frame, text=os.path.basename(f), variable=var, anchor="w", width=50, justify="left")
+            chk.pack(anchor="w")
+            sub_items.append(f)
+            sub_checks.append(var)
+
+    def set_as_main():
+        checked_files = [f for f, v in zip(sub_items, sub_checks) if v.get()]
+        if len(checked_files) != 1:
+            messagebox.showwarning("提醒", "請勾選一筆作為母資料")
+            return
+        main_listbox.delete(0, tk.END)
+        main_listbox.insert(0, os.path.basename(checked_files[0]))
+
+    def select_all():
+        for v in sub_checks:
+            v.set(True)
+
+    def apply_to_all():
+        threading.Thread(target=apply_thread).start()
+
+    def apply_thread():
+        if main_listbox.size() == 0:
+            messagebox.showerror("錯誤", "請先指定母資料")
+            return
+
+        main_filename = main_listbox.get(0)
+        matched_main_path = next((f for f in sub_items if os.path.basename(f) == main_filename), None)
+
+        if not matched_main_path or not os.path.exists(matched_main_path):
+            messagebox.showerror("錯誤", "找不到對應的母資料原始路徑")
+            return
+
+        specialty_key = dest_path_var.get()
+        if not allow_all and specialty != specialty_key:
+            messagebox.showerror("錯誤", "無法套用至非本專長的分類")
+            return
+
+        total = sum(v.get() for v in sub_checks)
+        if total == 0:
+            messagebox.showinfo("提示", "請勾選至少一筆子資料")
+            return
+
+        def update_progress(pct, text):
+            progress_bar.after(0, lambda: progress_var.set(pct))
+            status_label.after(0, lambda: status_var.set(text))
+
+        update_progress(0, "開始套用...")
+
+        count = 0
+        for i, (f, v) in enumerate(zip(sub_items, sub_checks)):
+            if not v.get():
+                continue
+            try:
+                dest_dir = os.path.dirname(f)
+                dest_name = os.path.basename(f)
+                new_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{dest_name}"
+                dest_path = os.path.join(dest_dir, new_name)
+                shutil.copy(matched_main_path, dest_path)
+                field_map = {
+                    "dip": "dip_sop",
+                    "assembly": "assembly_sop",
+                    "test": "test_sop",
+                    "packaging": "packaging_sop"
+                }
+                field_name = field_map.get(dest_path_var.get())
+                if field_name:
+                    product_code = os.path.splitext(dest_name)[0]
+                    if len(product_code) in (8, 12) and product_code.isdigit():
+                        with sqlite3.connect(db_name) as conn:
+                            cursor = conn.cursor()
+                            cursor.execute(f"""
+                                UPDATE issues
+                                SET {field_name} = ?, created_at = ?
+                                WHERE product_code = ?
+                            """, (dest_path, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), product_code))
+                            conn.commit()
+                log_activity(db_name, current_user.get("user"), "apply_sop", new_name, module="SOP套用")
+                count += 1
+                pct = int(count / total * 100)
+                update_progress(pct, f"套用中：{dest_name}")
+            except Exception as e:
+                messagebox.showerror("錯誤", f"複製到 {dest_path} 失敗：{e}")
+
+        update_progress(100, "SOP 生成完成 ✔")
+        messagebox.showinfo("完成", f"已完成套用，共處理 {count} 筆")
+        search_apply_files()
+
+    btn_frame = tk.Frame(parent_frame)
+    btn_frame.pack(anchor="nw", padx=10, pady=10)
+    tk.Button(btn_frame, text="⭡", command=set_as_main, width=3).pack(side="left")
+    tk.Button(btn_frame, text="全選", command=select_all).pack(side="left", padx=5)
+    tk.Button(btn_frame, text="套用", command=apply_to_all).pack(side="left", padx=5)
+
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(parent_frame, variable=progress_var, maximum=100, length=300)
+    progress_bar.pack(anchor="w", padx=10, pady=(5, 0))
+    status_var = tk.StringVar(value="等待操作")
+    status_label = tk.Label(parent_frame, textvariable=status_var, fg="blue")
+    status_label.pack(anchor="w", padx=10, pady=2)

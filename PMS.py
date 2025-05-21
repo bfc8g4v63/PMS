@@ -11,7 +11,7 @@ import tempfile
 from utils import log_activity
 from db.schema_helper import auto_add_missing_columns, get_required_columns
 from account_management_tab import build_user_management_tab
-from sop_build_tab import build_sop_upload_tab
+from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 
 # 設定原始資料庫與本機暫存資料庫位置
 ORIGINAL_DB = os.path.join(os.path.dirname(__file__), "PMS.db")
@@ -429,7 +429,16 @@ def create_main_interface(root, db_name, login_info):
             notebook.add(frame, text=name)
 
     if current_role in ("admin", "engineer"):
-        build_sop_upload_tab(tabs["SOP生成"], login_info,db_name)
+        sop_tab = tabs["SOP生成"]
+
+        left_frame = tk.Frame(sop_tab)
+        left_frame.pack(side="left", fill="both", expand=True)
+
+        right_frame = tk.Frame(sop_tab)
+        right_frame.pack(side="left", fill="both", padx=10, pady=10)
+
+        build_sop_upload_tab(left_frame, login_info, db_name)
+        build_sop_apply_section(right_frame, login_info,db_name)
 
     if current_role in ("admin", "engineer", "leader"):
         build_log_view_tab(tabs["操作紀錄"], db_name, current_role)
