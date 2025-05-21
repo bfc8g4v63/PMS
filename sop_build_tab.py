@@ -1,10 +1,9 @@
-from tkinter import ttk
 import tkinter as tk
 import threading
 import shutil
 import os
 from tkinter import filedialog, messagebox, ttk
-from PyPDF2 import PdfMerger
+import fitz
 from datetime import datetime
 from utils import log_activity
 
@@ -49,7 +48,6 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             result_list.delete(0, tk.END)
             selected_files.clear()
         dropdown.bind("<<ComboboxSelected>>", on_dropdown_change)
-
     else:
         dest_path_var = tk.StringVar(value=specialty)
         search_path = UPLOAD_PATHS.get(specialty)
@@ -197,70 +195,67 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         threading.Thread(target=generate_pdf_thread).start()
 
     def generate_pdf_thread():
-        output_name = entry_filename.get().strip()
-        if not output_name:
-            entry_filename.after(0, lambda: messagebox.showwarning("請輸入檔名", "請輸入存檔名稱"))
-            return
-        if not selected_files:
-            entry_filename.after(0, lambda: messagebox.showwarning("未選擇內容", "請先選擇並排序要合併的 PDF"))
-            return
-
-        specialty_key = dest_path_var.get()
-        save_dir = SOP_SAVE_PATHS.get(specialty_key)
-
-        if not save_dir:
-            entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"無法判定專長「{specialty_key}」的儲存路徑"))
-            return
-
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
-
-        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        final_filename = f"{timestamp}_{output_name}.pdf"
-        save_path = os.path.join(save_dir, final_filename)
-
-        try:
-            merger = PdfMerger()
-            skipped = []
-            source_dir = UPLOAD_PATHS.get(dest_path_var.get())
-
-            total_files = len(selected_files)
-            if total_files == 0:
+            output_name = entry_filename.get().strip()
+            if not output_name:
+                entry_filename.after(0, lambda: messagebox.showwarning("請輸入檔名", "請輸入儲檔名稱"))
+                return
+            if not selected_files:
                 entry_filename.after(0, lambda: messagebox.showwarning("未選擇內容", "請先選擇並排序要合併的 PDF"))
                 return
 
-            def update_progress(value, text):
-                progress_bar.after(0, lambda: progress_var.set(value))
-                status_label.after(0, lambda: status_var.set(text))
+            specialty_key = dest_path_var.get()
+            save_dir = SOP_SAVE_PATHS.get(specialty_key)
 
-            update_progress(0, "開始合併 PDF...")
+            if not save_dir:
+                entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"無法判定專長「{specialty_key}」的儲存路徑"))
+                return
 
-            for i, f in enumerate(selected_files):
-                full_path = os.path.join(source_dir, f)
-                if os.path.exists(full_path):
-                    merger.append(full_path)
-                else:
-                    skipped.append(f)
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
 
-                progress = (i + 1) / total_files * 100
-                update_progress(progress, f"處理中：{f}")
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            final_filename = f"{timestamp}_{output_name}.pdf"
+            save_path = os.path.join(save_dir, final_filename)
 
-            update_progress(100, "完成合併，儲存中...")
+            try:
+                merged_pdf = fitz.open()
+                skipped = []
+                source_dir = UPLOAD_PATHS.get(dest_path_var.get())
+                total_files = len(selected_files)
 
-            merger.write(save_path)
-            merger.close()
+                def update_progress(value, text):
+                    progress_bar.after(0, lambda: progress_var.set(value))
+                    status_label.after(0, lambda: status_var.set(text))
 
-            log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-            entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP：\n{save_path}"))
+                update_progress(0, "開始合併 PDF...")
 
-            if skipped:
-                skipped_str = "\n".join(skipped)
-                entry_filename.after(0, lambda: messagebox.showwarning("部分檔案遺失", f"以下檔案未找到，未合併：\n{skipped_str}"))
+                for i, f in enumerate(selected_files):
+                    full_path = os.path.join(source_dir, f)
+                    if os.path.exists(full_path):
+                        doc = fitz.open(full_path)
+                        merged_pdf.insert_pdf(doc)
+                        doc.close()
+                    else:
+                        skipped.append(f)
 
-            update_progress(100, "SOP 生成完成 ✔")
+                    progress = (i + 1) / total_files * 100
+                    update_progress(progress, f"處理中: {f}")
 
-        except Exception as e:
-            entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"儲存失敗：{e}"))
+                update_progress(100, "完成合併，儲存中...")
+                merged_pdf.save(save_path)
+                merged_pdf.close()
+
+                log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
+                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP\n{save_path}"))
+
+                if skipped:
+                    skipped_str = "\n".join(skipped)
+                    entry_filename.after(0, lambda: messagebox.showwarning("部分檔案遺失", f"以下檔案未找到，未合併:\n{skipped_str}"))
+
+                update_progress(100, "SOP 生成完成 ✔")
+
+            except Exception as e:
+                entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"儲存失敗: {e}"))
 
     tk.Label(left, text="存檔名稱：").pack(anchor="w")
     filename_frame = tk.Frame(left)
@@ -274,5 +269,5 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
 
     status_var = tk.StringVar(value="等待操作")
     status_label = tk.Label(left, textvariable=status_var, fg="blue")
-    status_label.pack(anchor="w", pady=2)   
-    tk.Label(right, text="預留 SOP 套用區（待建置）", fg="gray").pack(anchor="nw", padx=10, pady=20)    
+    status_label.pack(anchor="w", pady=2)
+    tk.Label(right, text="預留 SOP 套用區（待建置）", fg="gray").pack(anchor="nw", padx=10, pady=20) 
