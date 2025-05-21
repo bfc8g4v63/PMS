@@ -21,7 +21,7 @@ def build_user_management_tab(tab, db_name, current_user):
     tk.Label(frame, text="帳號管理").pack(anchor="w")
 
     control_frame = tk.Frame(frame)
-    control_frame.pack(anchor="w", pady=(0, 5))
+    control_frame.pack(fill="x", pady=5, padx=10)
 
     tk.Label(control_frame, text="顯示帳號：").pack(side="left")
     filter_var = tk.StringVar(value="全部")
@@ -70,8 +70,11 @@ def build_user_management_tab(tab, db_name, current_user):
 
     filter_combo.bind("<<ComboboxSelected>>", lambda e: refresh_users())
 
-    form = tk.LabelFrame(frame, text="新增使用者")
-    form.pack(fill="x", pady=10, padx=10)
+    form_container = tk.Frame(frame)
+    form_container.pack(fill="x", pady=10, padx=10)
+
+    form = tk.LabelFrame(form_container, text="新增使用者")
+    form.pack(side="left", fill="both", expand=True, padx=(0, 5))
 
     tk.Label(form, text="帳號：").grid(row=0, column=0, sticky="e", padx=5, pady=5)
     entry_user = tk.Entry(form, width=30)
@@ -104,6 +107,9 @@ def build_user_management_tab(tab, db_name, current_user):
             col = 0
             row += 1
 
+    def collect_permission_values():
+        return {k: v.get() for k, v in permission_vars.items()}
+
     def hash_password(password):
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
@@ -112,7 +118,7 @@ def build_user_management_tab(tab, db_name, current_user):
         new_pw = entry_pass.get().strip()
         role = role_var.get()
 
-        permissions = {k: v.get() for k, v in permission_vars.items()}
+        permissions = collect_permission_values()
         can_add = permissions["can_add"]
         can_delete = permissions["can_delete"]
         active = permissions["active"]
@@ -133,10 +139,12 @@ def build_user_management_tab(tab, db_name, current_user):
                 messagebox.showerror("錯誤", "該使用者已存在")
                 return
 
-            cursor.execute("""
-                INSERT INTO users (username, password, role, can_add, can_delete, active, specialty)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            """, (new_user, hashed_pw, role, can_add, can_delete, active, specialty_var.get()))
+            fields = ["username", "password", "role", "specialty"] + list(permission_vars.keys())
+            placeholders = ", ".join(["?"] * len(fields))
+            sql = f"INSERT INTO users ({', '.join(fields)}) VALUES ({placeholders})"
+            values = [new_user, hashed_pw, role, specialty_var.get()] + [permission_vars[k].get() for k in permission_vars]
+            cursor.execute(sql, values)
+
             conn.commit()
 
         messagebox.showinfo("成功", "使用者已新增")
@@ -151,8 +159,8 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Button(form, text="新增使用者", command=add_user, bg="lightblue").grid(row=5, column=1, pady=10)
 
-    edit_frame = tk.LabelFrame(frame, text="修改權限 / 狀態 / 帳號名稱")
-    edit_frame.pack(fill="x", pady=8)
+    edit_frame = tk.LabelFrame(form_container, text="修改權限")
+    edit_frame.pack(side="left", fill="both", expand=True)
 
     tk.Label(edit_frame, text="新帳號:").grid(row=0, column=0)
     entry_edit_user = tk.Entry(edit_frame)

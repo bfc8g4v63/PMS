@@ -56,7 +56,6 @@ def logout_and_exit(root):
         sync_back_to_server()
         root.destroy()
 
-
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
@@ -430,7 +429,7 @@ def create_main_interface(root, db_name, login_info):
             notebook.add(frame, text=name)
 
     if current_role in ("admin", "engineer"):
-        build_sop_upload_tab(tabs["SOP生成"], login_info)
+        build_sop_upload_tab(tabs["SOP生成"], login_info,db_name)
 
     if current_role in ("admin", "engineer", "leader"):
         build_log_view_tab(tabs["操作紀錄"], db_name, current_role)
