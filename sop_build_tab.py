@@ -8,7 +8,6 @@ import fitz
 from datetime import datetime
 from utils import log_activity #, open_file
 
-
 UPLOAD_PATHS = {
     "dip": r"\\192.120.100.177\工程部\生產管理\SOP生成\DIP",
     "assembly": r"\\192.120.100.177\工程部\生產管理\SOP生成\組裝",
@@ -30,20 +29,23 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     search_results = []
 
     main_frame = tk.Frame(tab_frame)
-    main_frame.pack(fill="both", expand=True, padx=10, pady=10)
+    main_frame.pack(fill="both", expand=True)
 
-    left = tk.Frame(main_frame)
-    left.pack(side="left", fill="y", anchor="n", padx=10)
+    left = tk.Frame(main_frame, width=700)
+    left.pack(side="left", fill="y", padx=10, pady=5)
 
-    right = tk.Frame(main_frame, width=300)
-    right.pack(side="left", fill="both", expand=True)
+    right = tk.Frame(main_frame)
+    right.pack(side="left", fill="both", expand=True, padx=10, pady=5)
+
+    main_frame.columnconfigure(0, weight=2)
+    main_frame.columnconfigure(1, weight=1)
 
     if role == "admin":
         dest_path_var = tk.StringVar(value="dip")
         select_frame = tk.Frame(left)
         select_frame.pack(anchor="w")
-        tk.Label(select_frame, text="選擇上傳分類：").pack(side="left")
-        dropdown = ttk.Combobox(select_frame, textvariable=dest_path_var, values=list(UPLOAD_PATHS.keys()), state="readonly", width=10)
+        tk.Label(select_frame, text="專業分類：").pack(side="left")
+        dropdown = ttk.Combobox(select_frame, textvariable=dest_path_var, values=list(UPLOAD_PATHS.keys()), state="readonly", width=12)
         dropdown.pack(side="left")
         def on_dropdown_change(event):
             search_results.clear()
@@ -260,10 +262,12 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
                 entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"儲存失敗: {e}"))
 
     tk.Label(left, text="存檔名稱：").pack(anchor="w")
+
     filename_frame = tk.Frame(left)
     filename_frame.pack(anchor="w", pady=5)
-    entry_filename = tk.Entry(filename_frame, width=40)
+    entry_filename = tk.Entry(filename_frame, width=30)
     entry_filename.pack(side="left")
+
     tk.Button(filename_frame, text="生成 PDF", bg="lightgreen", width=12, command=generate_pdf).pack(side="left", padx=10)
     progress_var = tk.DoubleVar()
     progress_bar = ttk.Progressbar(left, variable=progress_var, maximum=100, length=300)
@@ -274,48 +278,138 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     status_label.pack(anchor="w", pady=2)
 
 def build_sop_apply_section(parent_frame, current_user, db_name):
+
+    main_wrapper = tk.Frame(parent_frame)
+    main_wrapper.pack(anchor="nw", padx=0, pady=5)
+    search_frame = tk.Frame(main_wrapper)
+    search_frame.pack(anchor="nw", padx=10, pady=5)
+    entry_apply_search = tk.Entry(search_frame, width=30)
+    entry_apply_search.pack(side="left", padx=(0, 5))
+    search_btn = tk.Button(search_frame, text="來源搜尋", command=lambda: search_apply_files())
+    search_btn.pack(side="left", padx=(0, 20))
+    source_var = tk.StringVar()
+    source_entry = tk.Entry(search_frame, textvariable=source_var, width=25)
+    source_entry.pack(side="left", padx=(0, 5))
+
+    tk.Label(search_frame, text="指定來源", anchor="w").pack(side="left", padx=(0, 5))
+
     role = current_user.get("role", "")
     specialty = current_user.get("specialty", "").lower()
     allow_all = role == "admin"
 
-    tk.Label(parent_frame, text="SOP 套用區", font=("Microsoft JhengHei", 12, "bold")).pack(anchor="nw", padx=10, pady=(10, 5))
 
-    search_frame = tk.Frame(parent_frame)
-    search_frame.pack(anchor="nw", padx=10, pady=5)
-    entry_apply_search = tk.Entry(search_frame, width=30)
-    entry_apply_search.pack(side="left")
 
-    dest_path_var = tk.StringVar(value=specialty)
-    if allow_all:
-        tk.Label(search_frame, text="選擇上傳分類：").pack(side="left", padx=5)
-        dropdown = ttk.Combobox(search_frame, textvariable=dest_path_var, values=list(SOP_SAVE_PATHS.keys()), state="readonly", width=10)
-        dropdown.pack(side="left")
+    #tk.Label(main_wrapper, text="指定來源", width=10, anchor="w").pack(anchor="nw", padx=(8, 0))
+    tk.Label(main_wrapper, text="來源清單").pack(anchor="nw", padx=10, pady=(10, 0))
 
-    tk.Button(search_frame, text="搜尋", command=lambda: search_apply_files()).pack(side="left", padx=5)
-
-    tk.Label(parent_frame, text="母資料").pack(anchor="nw", padx=10)
-    main_listbox = tk.Listbox(parent_frame, width=60, height=1)
-    main_listbox.pack(anchor="nw", padx=10)
-
-    tk.Label(parent_frame, text="子資料清單").pack(anchor="nw", padx=10, pady=(10, 0))
-
-    sub_list_frame = tk.Frame(parent_frame)
+    sub_list_frame = tk.Frame(main_wrapper)
     sub_list_frame.pack(anchor="nw", padx=10)
     sub_items = []
     sub_checks = []
 
-    canvas = tk.Canvas(sub_list_frame, width=400, height=200)
-    scrollbar = tk.Scrollbar(sub_list_frame, orient="vertical", command=canvas.yview)
-    scroll_frame = tk.Frame(canvas)
-    canvas.create_window((0, 0), window=scroll_frame, anchor="nw")
-    canvas.configure(yscrollcommand=scrollbar.set)
-    canvas.pack(side="left")
+    if role == "admin":
+        dest_path_var = tk.StringVar(value="dip")
+        tk.Label(search_frame, text="專業分類：").pack(side="left", padx=5)
+        dropdown = ttk.Combobox(search_frame, textvariable=dest_path_var, values=list(SOP_SAVE_PATHS.keys()), state="readonly", width=10)
+        dropdown.pack(side="left")
+    else:
+        dest_path_var = tk.StringVar(value=specialty)
+
+    keyword_frame = tk.Frame(main_wrapper)
+    keyword_frame.pack(anchor="nw", padx=10, pady=(0, 5))
+
+    entry_keyword2 = tk.Entry(keyword_frame, width=30)
+    entry_keyword2.pack(side="left", padx=(0, 5))
+    tk.Button(keyword_frame, text="套用搜尋", command=lambda: search_apply_targets()).pack(side="left", padx=(0, 20))
+
+    apply_frame = tk.LabelFrame(main_wrapper, text="套用清單", width=720)
+    apply_frame.pack(anchor="nw", padx=10, pady=(10, 0), fill="none")
+    btn_frame = tk.Frame(main_wrapper)
+    btn_frame.pack(anchor="nw", padx=10, pady=(5, 0))
+    
+    apply_canvas = tk.Canvas(apply_frame)
+    scroll_y = ttk.Scrollbar(apply_frame, orient="vertical", command=apply_canvas.yview)
+    scroll_x = ttk.Scrollbar(apply_frame, orient="horizontal", command=apply_canvas.xview)
+
+    apply_scroll = tk.Frame(apply_canvas)
+
+    apply_scroll.bind("<Configure>", lambda e: apply_canvas.configure(scrollregion=apply_canvas.bbox("all")))
+    apply_canvas.create_window((0, 0), window=apply_scroll, anchor="nw")
+    apply_canvas.configure(height=170, width=720, yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+
+
+    apply_canvas.pack(side="left", fill="both", expand=True)
+    scroll_y.pack(side="right", fill="y")
+    scroll_x.pack(side="bottom", fill="x")    
+
+    apply_items = []
+    apply_checks = []
+
+    def search_apply_targets():
+        keyword = entry_keyword2.get().strip().lower()
+        if not keyword:
+            messagebox.showinfo("提示", "請輸入料號/品名關鍵字")
+            return
+
+        for widget in apply_scroll.winfo_children():
+            widget.destroy()
+
+        apply_items.clear()
+        apply_checks.clear()
+
+        terms_and = [t.strip() for t in keyword.split('&')] if '&' in keyword else []
+        terms_or = [t.strip() for t in keyword.split('/')] if '/' in keyword else []
+        
+        conn = sqlite3.connect(db_name)
+        cursor = conn.cursor()
+        cursor.execute("SELECT product_code, product_name FROM issues")
+        all_data = cursor.fetchall()
+        conn.close()
+
+        for code, name in all_data:
+            combined = f"{code}_{name}".lower()
+            matched = False
+            if terms_and:
+                matched = all(term in combined for term in terms_and)
+            elif terms_or:
+                matched = any(term in combined for term in terms_or)
+            else:
+                matched = keyword in combined
+
+            if matched:
+                var = tk.BooleanVar()
+                cb = tk.Checkbutton(apply_scroll, text=f"{code}_{name}", variable=var, anchor="w", justify="left")
+                cb.pack(anchor="w")
+                apply_items.append((code, name))
+                apply_checks.append(var)
+    
+    tree = ttk.Treeview(sub_list_frame, columns=("filename",), show="headings", selectmode="extended", height=7)
+    tree.heading("filename", text="檔案名稱")
+    tree.column("filename", width=720, anchor="w")
+    tree.pack(side="left", fill="both", expand=True)
+
+    scrollbar_x = ttk.Scrollbar(sub_list_frame, orient="horizontal", command=tree.xview)
+    scrollbar_x.pack(side="bottom", fill="x")
+    tree.configure(xscrollcommand=scrollbar_x.set) 
+    scrollbar = ttk.Scrollbar(sub_list_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
+
+    def on_treeview_double_click(event):
+        item = tree.focus()
+        if item:
+            filename = tree.item(item)['values'][0]
+            if source_var.get() == filename:
+                source_var.set("")
+            else:
+                source_var.set(filename)
+    
+    tree.bind("<Double-1>", on_treeview_double_click)
 
     def search_apply_files():
         keyword = entry_apply_search.get().strip().lower()
-        for widget in scroll_frame.winfo_children():
-            widget.destroy()
+        for row in tree.get_children():
+            tree.delete(row)
         sub_items.clear()
         sub_checks.clear()
 
@@ -330,37 +424,40 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
             files = [os.path.join(search_path, f) for f in os.listdir(search_path) if keyword in f.lower() and f.lower().endswith(".pdf")]
 
         for f in files:
-            var = tk.BooleanVar()
-            chk = tk.Checkbutton(scroll_frame, text=os.path.basename(f), variable=var, anchor="w", width=50, justify="left")
-            chk.pack(anchor="w")
+            tree.insert("", "end", values=(os.path.basename(f),))
             sub_items.append(f)
-            sub_checks.append(var)
-
-    def set_as_main():
-        checked_files = [f for f, v in zip(sub_items, sub_checks) if v.get()]
-        if len(checked_files) != 1:
-            messagebox.showwarning("提醒", "請勾選一筆作為母資料")
-            return
-        main_listbox.delete(0, tk.END)
-        main_listbox.insert(0, os.path.basename(checked_files[0]))
 
     def select_all():
-        for v in sub_checks:
+        for v in apply_checks:
             v.set(True)
+
+    tk.Button(btn_frame, text="全選", command=select_all).pack(side="left", padx=5)
 
     def apply_to_all():
         threading.Thread(target=apply_thread).start()
+        
+    tk.Button(btn_frame, text="套用", command=apply_to_all).pack(side="left", padx=5)
 
     def apply_thread():
-        if main_listbox.size() == 0:
-            messagebox.showerror("錯誤", "請先指定母資料")
+        specialty_key = dest_path_var.get()
+        if not allow_all and specialty_key != specialty:
+            messagebox.showerror("錯誤", f"您只能操作自己的專長：{specialty}，目前選擇的是 {specialty_key}")
+            return
+        
+        main_filename = source_var.get()
+        if not main_filename:
+            messagebox.showerror("錯誤", "請先指定資料來源")
             return
 
-        main_filename = main_listbox.get(0)
-        matched_main_path = next((f for f in sub_items if os.path.basename(f) == main_filename), None)
+        matched_main_path = None
+        for path in SOP_SAVE_PATHS.values():
+            possible = os.path.join(path, main_filename)
+            if os.path.exists(possible):
+                matched_main_path = possible
+                break
 
-        if not matched_main_path or not os.path.exists(matched_main_path):
-            messagebox.showerror("錯誤", "找不到對應的母資料原始路徑")
+        if not matched_main_path:
+            messagebox.showerror("錯誤", "找不到對應的資料來源原始路徑")
             return
 
         specialty_key = dest_path_var.get()
@@ -368,9 +465,9 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
             messagebox.showerror("錯誤", "無法套用至非本專長的分類")
             return
 
-        total = sum(v.get() for v in sub_checks)
-        if total == 0:
-            messagebox.showinfo("提示", "請勾選至少一筆子資料")
+        selected = [(code, name) for (code, name), v in zip(apply_items, apply_checks) if v.get()]
+        if not selected:
+            messagebox.showinfo("提示", "請勾選至少一筆套用資料")
             return
 
         def update_progress(pct, text):
@@ -380,15 +477,15 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         update_progress(0, "開始套用...")
 
         count = 0
-        for i, (f, v) in enumerate(zip(sub_items, sub_checks)):
-            if not v.get():
-                continue
+        total = len(selected)
+        for code, name in selected:
             try:
-                dest_dir = os.path.dirname(f)
-                dest_name = os.path.basename(f)
-                new_name = f"{datetime.now().strftime('%Y%m%d%H%M%S')}_{dest_name}"
+                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                new_name = f"{timestamp}_{code}_{name}.pdf"
+                dest_dir = SOP_SAVE_PATHS.get(dest_path_var.get())
                 dest_path = os.path.join(dest_dir, new_name)
                 shutil.copy(matched_main_path, dest_path)
+
                 field_map = {
                     "dip": "dip_sop",
                     "assembly": "assembly_sop",
@@ -397,36 +494,29 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                 }
                 field_name = field_map.get(dest_path_var.get())
                 if field_name:
-                    product_code = os.path.splitext(dest_name)[0]
-                    if len(product_code) in (8, 12) and product_code.isdigit():
-                        with sqlite3.connect(db_name) as conn:
-                            cursor = conn.cursor()
-                            cursor.execute(f"""
-                                UPDATE issues
-                                SET {field_name} = ?, created_at = ?
-                                WHERE product_code = ?
-                            """, (dest_path, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), product_code))
-                            conn.commit()
+                    with sqlite3.connect(db_name) as conn:
+                        cursor = conn.cursor()
+                        cursor.execute(f"""
+                            UPDATE issues
+                            SET {field_name} = ?, created_at = ?
+                            WHERE product_code = ?
+                        """, (dest_path, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), code))
+                        conn.commit()
+
                 log_activity(db_name, current_user.get("user"), "apply_sop", new_name, module="SOP套用")
                 count += 1
-                pct = int(count / total * 100)
-                update_progress(pct, f"套用中：{dest_name}")
+                update_progress(int(count / total * 100), f"套用中：{new_name}")
             except Exception as e:
-                messagebox.showerror("錯誤", f"複製到 {dest_path} 失敗：{e}")
+                messagebox.showerror("錯誤", f"處理 {code}_{name} 失敗：{e}")
 
         update_progress(100, "SOP 生成完成 ✔")
         messagebox.showinfo("完成", f"已完成套用，共處理 {count} 筆")
+
         search_apply_files()
 
-    btn_frame = tk.Frame(parent_frame)
-    btn_frame.pack(anchor="nw", padx=10, pady=10)
-    tk.Button(btn_frame, text="⭡", command=set_as_main, width=3).pack(side="left")
-    tk.Button(btn_frame, text="全選", command=select_all).pack(side="left", padx=5)
-    tk.Button(btn_frame, text="套用", command=apply_to_all).pack(side="left", padx=5)
-
     progress_var = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(parent_frame, variable=progress_var, maximum=100, length=300)
+    progress_bar = ttk.Progressbar(main_wrapper, variable=progress_var, maximum=100, length=300)
     progress_bar.pack(anchor="w", padx=10, pady=(5, 0))
     status_var = tk.StringVar(value="等待操作")
-    status_label = tk.Label(parent_frame, textvariable=status_var, fg="blue")
+    status_label = tk.Label(main_wrapper, textvariable=status_var, fg="blue")
     status_label.pack(anchor="w", padx=10, pady=2)

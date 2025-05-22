@@ -388,7 +388,7 @@ def build_password_change_tab(tab, db_name, current_user):
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
-        with sqlite3.connect(db_name) as conn:
+        with sqlite3.connect(db_name) as conn:  
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
             if not cursor.fetchone():
@@ -419,6 +419,8 @@ def create_main_interface(root, db_name, login_info):
         "SOP生成": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
+        "異常平台": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
+        "其他工具": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
         "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
 
