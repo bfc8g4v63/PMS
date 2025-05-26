@@ -355,7 +355,7 @@ def build_password_change_tab(tab, db_name, current_user):
     tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
 
 def build_password_change_tab(tab, db_name, current_user):
-    tk.Label(tab, text="變更密碼", font=("Microsoft JhengHei", 12, "bold")).pack(pady=(10, 5))
+    tk.Label(tab, text="變更密碼").pack(pady=(10, 5))
 
     form = tk.Frame(tab)
     form.pack(pady=10)

@@ -268,7 +268,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     entry_filename = tk.Entry(filename_frame, width=30)
     entry_filename.pack(side="left")
 
-    tk.Button(filename_frame, text="生成 PDF", bg="lightgreen", width=12, command=generate_pdf).pack(side="left", padx=10)
+    tk.Button(filename_frame, text="生成 SOP", bg="lightgreen", width=12, command=generate_pdf).pack(side="left", padx=10)
     progress_var = tk.DoubleVar()
     progress_bar = ttk.Progressbar(left, variable=progress_var, maximum=100, length=300)
     progress_bar.pack(anchor="w", pady=5)
@@ -283,7 +283,8 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
     main_wrapper.pack(anchor="nw", padx=0, pady=5)
     search_frame = tk.Frame(main_wrapper)
     search_frame.pack(anchor="nw", padx=10, pady=5)
-    entry_apply_search = tk.Entry(search_frame, width=30)
+    #來源搜尋
+    entry_apply_search = tk.Entry(search_frame, width=20)
     entry_apply_search.pack(side="left", padx=(0, 5))
     search_btn = tk.Button(search_frame, text="來源搜尋", command=lambda: search_apply_files())
     search_btn.pack(side="left", padx=(0, 20))
@@ -317,8 +318,8 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
 
     keyword_frame = tk.Frame(main_wrapper)
     keyword_frame.pack(anchor="nw", padx=10, pady=(0, 5))
-
-    entry_keyword2 = tk.Entry(keyword_frame, width=30)
+    #套用搜尋
+    entry_keyword2 = tk.Entry(keyword_frame, width=20)
     entry_keyword2.pack(side="left", padx=(0, 5))
     tk.Button(keyword_frame, text="套用搜尋", command=lambda: search_apply_targets()).pack(side="left", padx=(0, 20))
 
@@ -509,7 +510,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
             except Exception as e:
                 messagebox.showerror("錯誤", f"處理 {code}_{name} 失敗：{e}")
 
-        update_progress(100, "SOP 生成完成 ✔")
+        update_progress(100, "SOP 套用完成 ✔")
         messagebox.showinfo("完成", f"已完成套用，共處理 {count} 筆")
 
         search_apply_files()
