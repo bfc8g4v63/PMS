@@ -1,6 +1,4 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-from datetime import datetime
 import sqlite3
 import os
 import shutil
@@ -8,10 +6,15 @@ import hashlib
 import subprocess
 import sys
 import tempfile
+import socket
+
 from utils import log_activity
 from db.schema_helper import auto_add_missing_columns, get_required_columns
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
+from tkinter import ttk, filedialog, messagebox
+from datetime import datetime
+
 
 # 設定原始資料庫與本機暫存資料庫位置
 ORIGINAL_DB = os.path.join(os.path.dirname(__file__), "PMS.db")
@@ -29,6 +32,17 @@ PACKAGING_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮�
 OQC_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查表OQC"
 
 LOG_TABLE = "activity_logs"
+
+_instance_lock = None
+
+def is_another_instance_running():
+    global _instance_lock
+    try:
+        _instance_lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        _instance_lock.bind(('localhost', 65432))
+        return False
+    except OSError:
+        return True
 
 def init_db():
     if os.path.exists(DB_NAME) and not os.access(DB_NAME, os.R_OK | os.W_OK):
@@ -749,6 +763,9 @@ def open_password_change_window(parent, db_name, username):
     tk.Button(win, text="變更密碼", bg="lightgreen", command=confirm_change).pack(pady=15)
 
 if __name__ == "__main__":
+    if is_another_instance_running():
+        messagebox.showerror("錯誤", "本程式已在執行中，請勿重複開啟。")
+        sys.exit()
     init_db()
     initialize_database()
     login_info = login()
