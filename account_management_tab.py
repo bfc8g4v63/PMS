@@ -1,7 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
 import sqlite3
 import hashlib
+import re
+from tkinter import ttk, messagebox
 from utils import log_activity
 
 def build_user_management_tab(tab, db_name, current_user):
@@ -129,7 +130,9 @@ def build_user_management_tab(tab, db_name, current_user):
         if not role:
             messagebox.showwarning("警告", "請選擇角色")
             return
-
+        if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pw):
+            messagebox.showerror("錯誤", "密碼須為6～12碼英文或數字組成")
+            return
         hashed_pw = hash_password(new_pw)
 
         with sqlite3.connect(db_name) as conn:
@@ -239,6 +242,9 @@ def build_user_management_tab(tab, db_name, current_user):
                 original_username = new_username
 
             if new_pass:
+                if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pass):
+                    messagebox.showerror("錯誤", "新密碼須為6～12碼英文或數字組成")
+                    return
                 hashed_pw = hash_password(new_pass)
                 cursor.execute("""
                     UPDATE users SET password=?, role=?, specialty=?,

@@ -7,14 +7,22 @@ import subprocess
 import sys
 import tempfile
 import socket
+import re
 
 from utils import log_activity
-from db.schema_helper import auto_add_missing_columns, get_required_columns
+from schema_helper import auto_add_missing_columns, get_required_columns
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
+SOP_FIELDS = {
+    "dip": ("DIP SOP", "dip_sop", "dip_sop_bypass", r"DIP_SOP"),
+    "assembly": ("組裝SOP", "assembly_sop", "assembly_sop_bypass", r"組裝SOP"),
+    "test": ("測試SOP", "test_sop", "test_sop_bypass", r"測試SOP"),
+    "packaging": ("包裝SOP", "packaging_sop", "packaging_sop_bypass", r"包裝SOP"),
+    "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC")
+}
 
 # 設定原始資料庫與本機暫存資料庫位置
 ORIGINAL_DB = os.path.join(os.path.dirname(__file__), "PMS.db")
@@ -318,7 +326,7 @@ def create_upload_field_with_update(row, label, folder, field_name, form, produc
     return entry
 
 def build_password_change_tab(tab, db_name, current_user):
-    tk.Label(tab, text="變更密碼", font=("Microsoft JhengHei", 12, "bold")).pack(pady=(10, 5))
+    tk.Label(tab, text="變更密碼",).pack(pady=(10, 5))
 
     form = tk.Frame(tab)
     form.pack(pady=10)
@@ -347,7 +355,11 @@ def build_password_change_tab(tab, db_name, current_user):
         if new_pw != confirm_pw:
             messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
             return
-
+        
+        if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pw):
+            messagebox.showerror("錯誤", "密碼須為6～12碼英文或數字組成")
+            return
+        
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
@@ -367,9 +379,6 @@ def build_password_change_tab(tab, db_name, current_user):
         confirm_pass_entry.delete(0, tk.END)
 
     tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
-
-def build_password_change_tab(tab, db_name, current_user):
-    tk.Label(tab, text="變更密碼").pack(pady=(10, 5))
 
     form = tk.Frame(tab)
     form.pack(pady=10)
@@ -538,6 +547,30 @@ def create_main_interface(root, db_name, login_info):
         tree.heading(col, text=col)
         tree.column(col, width=120)
     tree.pack(fill="both", expand=True, padx=10, pady=5)
+    def on_right_click(event):
+        item = tree.identify_row(event.y)
+        col = tree.identify_column(event.x)
+        if not item or not col:
+            return
+        col_index = int(col[1:]) - 1
+        if col_index not in range(2, 7):
+            return
+
+        product_code = tree.item(item)['values'][0]
+        sop_key = list(SOP_FIELDS.keys())[col_index - 2]
+        field_name = SOP_FIELDS[sop_key][1]
+        bypass_field = SOP_FIELDS[sop_key][2]
+
+        menu = tk.Menu(tree, tearoff=0)
+        menu.add_command(
+            label="啟用/停用",
+            command=lambda: toggle_bypass(product_code, field_name, bypass_field)
+        )
+        menu.post(event.x_root, event.y_root)
+
+    tree.bind("<Button-3>", on_right_click)
+
+    tree.tag_configure("bypass", foreground="red")
 
     if current_role == "admin":
         def delete_selected():
@@ -565,7 +598,7 @@ def create_main_interface(root, db_name, login_info):
         tk.Button(delete_frame, text="刪除選取資料", command=delete_selected,
                 bg="lightcoral", fg="white").pack(side="right")
 
-    def query_data():
+    def query_data():    
         raw_input = entry_query.get().strip()
         for row in tree.get_children():
             tree.delete(row)
@@ -606,10 +639,35 @@ def create_main_interface(root, db_name, login_info):
             cursor.execute(final_query, params)
             for row in cursor.fetchall():
                 row_display = list(row)
-                row_display[0] = str(row_display[0]).zfill(8)
-                for i in range(2, 7):
-                    row_display[i] = os.path.basename(row_display[i]) if row_display[i] else ""
-                tree.insert('', tk.END, values=row_display)
+                product_code = str(row_display[0]).zfill(8)
+                row_display[0] = product_code
+
+                bypass_fields = [
+                    "dip_sop_bypass",
+                    "assembly_sop_bypass",
+                    "test_sop_bypass",
+                    "packaging_sop_bypass",
+                    "oqc_checklist_bypass"
+                ]
+
+                with sqlite3.connect(DB_NAME) as sub_conn:
+                    sub_cursor = sub_conn.cursor()
+                    for i in range(2, 7):
+                        sop_path = row_display[i]
+                        if sop_path:
+                            filename = os.path.basename(sop_path)
+                            bypass_field = bypass_fields[i - 2]
+                            sub_cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
+                            bypass = sub_cursor.fetchone()
+                            if bypass and bypass[0]:
+                                filename += "（已停用）"
+                                row_display[i] = filename
+                            else:
+                                row_display[i] = filename
+                        else:
+                            row_display[i] = ""
+
+                tree.insert('', tk.END, values=row_display, tags=("bypass",) if "（已停用）" in str(row_display) else "")
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -619,6 +677,8 @@ def create_main_interface(root, db_name, login_info):
         col_index = int(col[1:]) - 1
         if col_index in range(2, 7):  
             filename = tree.item(item)['values'][col_index]
+            if "（已停用）" in filename:
+                return
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
             full_path = os.path.join(base_paths[col_index - 2], filename)
             if os.path.exists(full_path):
@@ -637,6 +697,25 @@ def create_main_interface(root, db_name, login_info):
 
     tree.bind("<Double-1>", on_double_click)
     tree.bind("<Control-c>", on_copy)
+    
+    def toggle_bypass(product_code, field_name, bypass_field):
+        with sqlite3.connect(DB_NAME) as conn:
+            cursor = conn.cursor()
+
+            cursor.execute(
+                f"SELECT {bypass_field} FROM issues WHERE product_code=?",
+                (product_code,)
+            )
+            current = cursor.fetchone()
+
+            new_value = 0 if current and current[0] else 1
+            cursor.execute(
+                f"UPDATE issues SET {bypass_field}=? WHERE product_code=?",
+                (new_value, product_code)
+            )
+            conn.commit()
+
+        query_data()
 
 def login():
     result = {
@@ -774,6 +853,23 @@ if __name__ == "__main__":
         root = tk.Tk()
         root.title("生產資訊平台")
         root.geometry("1000x750")
+
+        IDLE_TIMEOUT_MS = 3 * 60 * 1000
+
+        def reset_idle_timer(event=None):
+            if hasattr(root, "_idle_after_id"):
+                root.after_cancel(root._idle_after_id)
+            if hasattr(root, "_warning_after_id"):
+                root.after_cancel(root._warning_after_id)
+
+        def on_idle_timeout():
+            messagebox.showinfo("自動登出", "您已閒置超過 3 分鐘，系統將自動登出")
+            logout_and_exit(root)
+
+        for event_type in ["<Motion>", "<Key>", "<Button>"]:
+            root.bind_all(event_type, reset_idle_timer)
+        reset_idle_timer()
+
         try:
             root.iconbitmap("info.ico")
         except:
@@ -799,7 +895,6 @@ if __name__ == "__main__":
         def on_close():
             logout_and_exit(root)
         root.protocol("WM_DELETE_WINDOW", on_close)
-
         root.mainloop()
     else:
         print("使用者未登入或登入失敗，系統結束。")
