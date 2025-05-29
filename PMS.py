@@ -1,13 +1,13 @@
 import tkinter as tk
 import sqlite3
 import os
-import shutil
 import hashlib
 import subprocess
 import sys
-import tempfile
 import socket
 import re
+import shutil
+#import tempfile
 
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
@@ -24,14 +24,16 @@ SOP_FIELDS = {
     "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC")
 }
 
-# 設定原始資料庫與本機暫存資料庫位置
-ORIGINAL_DB = os.path.join(os.path.dirname(__file__), "PMS.db")
+BASE_SHARE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
+ORIGINAL_DB = os.path.join(BASE_SHARE, "PMS.db")
+DB_NAME     = ORIGINAL_DB
+
 #測試階段By pass
-# LOCAL_DB = os.path.join(tempfile.gettempdir(), "PMS.db")
+#LOCAL_DB = os.path.join(tempfile.gettempdir(), "PMS.db")
 #shutil.copy(ORIGINAL_DB, LOCAL_DB)
 #DB_NAME = LOCAL_DB
 
-DB_NAME = os.path.join(os.path.dirname(__file__), "PMS.db")
+
 
 DIP_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\DIP_SOP"
 ASSEMBLY_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\組裝SOP"
@@ -547,7 +549,11 @@ def create_main_interface(root, db_name, login_info):
         tree.heading(col, text=col)
         tree.column(col, width=120)
     tree.pack(fill="both", expand=True, padx=10, pady=5)
+    
     def on_right_click(event):
+        if current_role not in ("admin", "engineer"):
+            return
+
         item = tree.identify_row(event.y)
         col = tree.identify_column(event.x)
         if not item or not col:

@@ -13,12 +13,14 @@ UPLOAD_PATHS = {
     "assembly": r"\\192.120.100.177\工程部\生產管理\SOP生成\組裝",
     "test": r"\\192.120.100.177\工程部\生產管理\SOP生成\測試",
     "packaging": r"\\192.120.100.177\工程部\生產管理\SOP生成\包裝",
+    "oqc": r"\\192.120.100.177\工程部\生產管理\SOP生成\OQC"
 }
 SOP_SAVE_PATHS = {
     "dip": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\DIP_SOP",
     "assembly": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\組裝SOP",
     "test": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\測試SOP",
     "packaging": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\包裝SOP",
+    "packaging": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查表OQC"
 }
 
 def build_sop_upload_tab(tab_frame, current_user, db_name):
