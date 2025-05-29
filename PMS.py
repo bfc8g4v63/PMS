@@ -7,6 +7,7 @@ import sys
 import socket
 import re
 import shutil
+import atexit
 #import tempfile
 
 from utils import log_activity
@@ -16,6 +17,17 @@ from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
+lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
+with open(lock_path, "w") as f:
+    f.write("running")
+
+@atexit.register
+def remove_lock():
+    try:
+        os.remove(lock_path)
+    except:
+        pass
+    
 SOP_FIELDS = {
     "dip": ("DIP SOP", "dip_sop", "dip_sop_bypass", r"DIP_SOP"),
     "assembly": ("組裝SOP", "assembly_sop", "assembly_sop_bypass", r"組裝SOP"),
@@ -27,13 +39,6 @@ SOP_FIELDS = {
 BASE_SHARE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
 ORIGINAL_DB = os.path.join(BASE_SHARE, "PMS.db")
 DB_NAME     = ORIGINAL_DB
-
-#測試階段By pass
-#LOCAL_DB = os.path.join(tempfile.gettempdir(), "PMS.db")
-#shutil.copy(ORIGINAL_DB, LOCAL_DB)
-#DB_NAME = LOCAL_DB
-
-
 
 DIP_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\DIP_SOP"
 ASSEMBLY_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\組裝SOP"
@@ -71,12 +76,17 @@ def sync_back_to_server():
         print(f"資料回寫失敗: {e}")
 
 def logout_and_exit(root):
+    global _instance_lock
     try:
         root.update_idletasks()
         root.update()
     except:
         pass
     finally:
+        try:
+            _instance_lock.close()
+        except:
+            pass
         sync_back_to_server()
         root.destroy()
 
@@ -604,12 +614,15 @@ def create_main_interface(root, db_name, login_info):
         tk.Button(delete_frame, text="刪除選取資料", command=delete_selected,
                 bg="lightcoral", fg="white").pack(side="right")
 
-    def query_data():    
+    def query_data():
+        root.focus_force() 
         raw_input = entry_query.get().strip()
         for row in tree.get_children():
             tree.delete(row)
 
-        with sqlite3.connect(db_name) as conn:
+        with sqlite3.connect(db_name, timeout=5) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);") 
             cursor = conn.cursor()
 
             base_query = """
@@ -656,24 +669,23 @@ def create_main_interface(root, db_name, login_info):
                     "oqc_checklist_bypass"
                 ]
 
-                with sqlite3.connect(DB_NAME) as sub_conn:
-                    sub_cursor = sub_conn.cursor()
-                    for i in range(2, 7):
-                        sop_path = row_display[i]
-                        if sop_path:
-                            filename = os.path.basename(sop_path)
-                            bypass_field = bypass_fields[i - 2]
-                            sub_cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
-                            bypass = sub_cursor.fetchone()
-                            if bypass and bypass[0]:
-                                filename += "（已停用）"
-                                row_display[i] = filename
-                            else:
-                                row_display[i] = filename
+                for i in range(2, 7):
+                    sop_path = row_display[i]
+                    if sop_path:
+                        filename = os.path.basename(sop_path)
+                        bypass_field = bypass_fields[i - 2]
+                        cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
+                        bypass = cursor.fetchone()
+                        if bypass and bypass[0]:
+                            filename += "（已停用）"
+                            row_display[i] = filename
                         else:
-                            row_display[i] = ""
+                            row_display[i] = filename
+                    else:
+                        row_display[i] = ""
 
                 tree.insert('', tk.END, values=row_display, tags=("bypass",) if "（已停用）" in str(row_display) else "")
+
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -724,6 +736,7 @@ def create_main_interface(root, db_name, login_info):
         query_data()
 
 def login():
+    #messagebox.showinfo("目前資料庫路徑", DB_NAME)
     result = {
         "user": None,
         "role": None,
@@ -770,6 +783,7 @@ def login():
                     "can_view_issues": r[7],
                     "can_manage_users": r[8]
                 })
+                print("✅ 目前使用的 DB 檔案路徑：", DB_NAME)
                 login_window.destroy()
             else:
                 messagebox.showerror("錯誤", "帳號或密碼錯誤或帳號已停用")

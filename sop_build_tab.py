@@ -20,7 +20,7 @@ SOP_SAVE_PATHS = {
     "assembly": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\組裝SOP",
     "test": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\測試SOP",
     "packaging": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\包裝SOP",
-    "packaging": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查表OQC"
+    "oqc": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查表OQC"
 }
 
 def build_sop_upload_tab(tab_frame, current_user, db_name):
@@ -493,9 +493,10 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                     "dip": "dip_sop",
                     "assembly": "assembly_sop",
                     "test": "test_sop",
-                    "packaging": "packaging_sop"
+                    "packaging": "packaging_sop",
+                    "oqc": "oqc_checklist"
                 }
-                field_name = field_map.get(dest_path_var.get())
+                field_name = field_map.get(specialty.lower())
                 if field_name:
                     with sqlite3.connect(db_name) as conn:
                         cursor = conn.cursor()
