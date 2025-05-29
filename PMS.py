@@ -89,6 +89,7 @@ def logout_and_exit(root):
             pass
         sync_back_to_server()
         root.destroy()
+        sys.exit()
 
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -505,6 +506,10 @@ def create_main_interface(root, db_name, login_info):
         def save_data():
             code = entry_code.get().strip()
             name = entry_name.get().strip()
+
+            if not name:
+                messagebox.showerror("錯誤", "品名不能為空")
+                return
 
             if len(code) not in (8, 12) or not code.isdigit():
                 messagebox.showerror("錯誤", "必須為 8/12 碼數字")
