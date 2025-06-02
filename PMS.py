@@ -674,20 +674,23 @@ def create_main_interface(root, db_name, login_info):
                     "oqc_checklist_bypass"
                 ]
 
+                product_name = row_display[1]
+                timestamp    = row_display[8]
+
                 for i in range(2, 7):
                     sop_path = row_display[i]
                     if sop_path:
-                        filename = os.path.basename(sop_path)
                         bypass_field = bypass_fields[i - 2]
                         cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
                         bypass = cursor.fetchone()
+
                         if bypass and bypass[0]:
-                            filename += "（已停用）"
-                            row_display[i] = filename
+                            row_display[i] = f"（已停用） {product_code}{product_name} {timestamp}"
                         else:
-                            row_display[i] = filename
+                            row_display[i] = f"{product_code}{product_name} {timestamp}"
                     else:
                         row_display[i] = ""
+
 
                 tree.insert('', tk.END, values=row_display, tags=("bypass",) if "（已停用）" in str(row_display) else "")
 
