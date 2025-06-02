@@ -744,7 +744,7 @@ def create_main_interface(root, db_name, login_info):
         query_data()
 
 def login():
-    #messagebox.showinfo("目前資料庫路徑", DB_NAME)
+
     result = {
         "user": None,
         "role": None,
@@ -791,7 +791,7 @@ def login():
                     "can_view_issues": r[7],
                     "can_manage_users": r[8]
                 })
-                print("✅ 目前使用的 DB 檔案路徑：", DB_NAME)
+                print("目前使用的 DB 檔案路徑：", DB_NAME)
                 login_window.destroy()
             else:
                 messagebox.showerror("錯誤", "帳號或密碼錯誤或帳號已停用")
@@ -800,7 +800,7 @@ def login():
     login_window.title("登入系統")
     login_window.geometry("300x180")
     try:
-        login_window.iconbitmap("info.ico")
+        login_window.iconbitmap("PMS.ico")
     except:
         pass
     tk.Label(login_window, text="使用者名稱：").pack(pady=(15, 5))
@@ -823,7 +823,7 @@ def open_password_change_window(parent, db_name, username):
     win = tk.Toplevel(parent)
     win.title("變更密碼")
     win.geometry("300x220")
-    win.iconbitmap("info.ico")
+    win.iconbitmap("PMS.ico")
     win.resizable(False, False)
 
     tk.Label(win, text="舊密碼：").pack(pady=(10, 0))
@@ -899,7 +899,7 @@ if __name__ == "__main__":
         reset_idle_timer()
 
         try:
-            root.iconbitmap("info.ico")
+            root.iconbitmap("PMS.ico")
         except:
             pass
         import tkinter.font as tkFont

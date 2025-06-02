@@ -30,6 +30,10 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     selected_files = []
     search_results = []
 
+    if role == "engineer" and not specialty:
+        tk.Label(tab_frame, text="您僅有查閱權限，無法執行 SOP 上傳。", fg="red").pack(padx=10, pady=20)
+        return
+    
     main_frame = tk.Frame(tab_frame)
     main_frame.pack(fill="both", expand=True)
 
@@ -280,12 +284,21 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     status_label.pack(anchor="w", pady=2)
 
 def build_sop_apply_section(parent_frame, current_user, db_name):
+    role = current_user.get("role", "")
+    specialty = current_user.get("specialty", "").lower()
+
+    if role == "engineer" and not specialty:
+        lbl = tk.Label(parent_frame,
+                       text="您僅有查閱權限，無法執行 SOP 套用。", 
+                       fg="red")
+        lbl.pack(padx=10, pady=20)
+        return
 
     main_wrapper = tk.Frame(parent_frame)
     main_wrapper.pack(anchor="nw", padx=0, pady=5)
     search_frame = tk.Frame(main_wrapper)
     search_frame.pack(anchor="nw", padx=10, pady=5)
-    #來源搜尋
+
     entry_apply_search = tk.Entry(search_frame, width=20)
     entry_apply_search.pack(side="left", padx=(0, 5))
     search_btn = tk.Button(search_frame, text="來源搜尋", command=lambda: search_apply_files())
@@ -300,9 +313,6 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
     specialty = current_user.get("specialty", "").lower()
     allow_all = role == "admin"
 
-
-
-    #tk.Label(main_wrapper, text="指定來源", width=10, anchor="w").pack(anchor="nw", padx=(8, 0))
     tk.Label(main_wrapper, text="來源清單").pack(anchor="nw", padx=10, pady=(10, 0))
 
     sub_list_frame = tk.Frame(main_wrapper)
@@ -320,7 +330,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
 
     keyword_frame = tk.Frame(main_wrapper)
     keyword_frame.pack(anchor="nw", padx=10, pady=(0, 5))
-    #套用搜尋
+
     entry_keyword2 = tk.Entry(keyword_frame, width=20)
     entry_keyword2.pack(side="left", padx=(0, 5))
     tk.Button(keyword_frame, text="套用搜尋", command=lambda: search_apply_targets()).pack(side="left", padx=(0, 20))
@@ -442,6 +452,10 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
     tk.Button(btn_frame, text="套用", command=apply_to_all).pack(side="left", padx=5)
 
     def apply_thread():
+        if role == "engineer" and not specialty:
+            messagebox.showerror("權限限制", "您僅有查閱權限，無法執行 SOP 套用。")
+            return
+    
         specialty_key = dest_path_var.get()
         if not allow_all and specialty_key != specialty:
             messagebox.showerror("錯誤", f"您只能操作自己的專長：{specialty}，目前選擇的是 {specialty_key}")
