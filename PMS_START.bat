@@ -25,7 +25,6 @@ if exist "%LOCK%" (
         net use Z: /delete >nul 2>&1
         exit /b
     )
-    REM 鎖檔存在但程式沒跑，表示異常退出，清除鎖定
     del "%LOCK%" >nul 2>&1
 )
 
@@ -39,11 +38,7 @@ if errorlevel 1 (
     exit /b
 )
 
-REM === 啟動 PMS 程式 ===
+REM === 啟動 PMS 程式（背景模式）===
 echo PMS 系統啟動中...
-start "" "%DEST%"
-
-REM === 自動釋放網路磁碟 ===
-timeout /t 2 >nul
-net use Z: /delete >nul 2>&1
+start "" /B "%DEST%"
 exit /b

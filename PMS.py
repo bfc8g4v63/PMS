@@ -36,7 +36,7 @@ SOP_FIELDS = {
     "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC")
 }
 
-USE_LOCAL_DB = True
+USE_LOCAL_DB = False
 
 LOCAL_DB_PATH = r"C:\Users\user\Desktop\Nelson\Dev\GitHub\PMS\PMS.db"
 NETWORK_DB_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
@@ -193,14 +193,16 @@ def build_log_view_tab(tab, db_name, role):
         if not item or not col:
             return
         col_index = int(col[1:]) - 1
-        if col_index == 2:
-            filename = tree.item(item)["values"][2]
+        if col_index in range(2, 7):  
+            filename = tree.item(item)['values'][col_index]
+            if "（已停用）" in filename:
+                filename = filename.replace("（已停用） ", "")
+            filename = f"{filename}.pdf"
+
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
-            for base in base_paths:
-                path = os.path.join(base, filename)
-                if os.path.exists(path):
-                    open_file(path)
-                    break
+            full_path = os.path.join(base_paths[col_index - 2], filename)
+            if os.path.exists(full_path):
+                open_file(full_path)
 
     tree.bind("<Double-1>", on_double_click)
 
@@ -293,11 +295,18 @@ def initialize_database():
 
     auto_add_missing_columns(DB_NAME, get_required_columns())
 
-def save_file(file_path, target_folder, username):
+def save_file(file_path, target_folder, username, product_code=None, product_name=None):
     if not os.path.exists(file_path):
         return ""
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-    filename = f"{timestamp}_{os.path.basename(file_path)}"
+
+    if product_code and product_name:
+
+        filename = f"{product_code}_{product_name}_{timestamp}.pdf"
+    else:
+
+        filename = f"{timestamp}_{os.path.basename(file_path)}"
+
     target_path = os.path.join(target_folder, filename)
     try:
         shutil.copy(file_path, target_path)
@@ -307,15 +316,17 @@ def save_file(file_path, target_folder, username):
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
         return ""
 
+
 def update_sop_field(cursor, product_code, field_name, new_file_path):
     cursor.execute(f"UPDATE issues SET {field_name}=?, created_at=? WHERE product_code=?",
                (new_file_path, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), product_code))
 
-def handle_sop_update(product_code, sop_path, field_name, entry_widget, current_user):
+def handle_sop_update(product_code, product_name, sop_path, field_name, entry_widget, current_user):
     path = entry_widget.get().strip()
     if not path:
         return None
-    filename = save_file(path, sop_path, current_user)
+    filename = save_file(path, sop_path, current_user, product_code, product_name)
+
     if not filename:
         return None
     with sqlite3.connect(DB_NAME) as conn:
@@ -324,7 +335,8 @@ def handle_sop_update(product_code, sop_path, field_name, entry_widget, current_
         conn.commit()
     return filename
 
-def create_sop_update_button(frame, row, label, sop_path, field_name, product_code_entry, entry_widget, current_user, user_specialty, role, allowed_specialty):
+def create_sop_update_button(frame, row, label, sop_path, field_name, product_code_entry, product_name_entry, entry_widget, current_user, user_specialty, role, allowed_specialty):
+
     def update_action():
         if role != "admin" and user_specialty != allowed_specialty:
             messagebox.showerror("權限限制", f"您無法上傳 {label}，僅限 {allowed_specialty} 工程師")
@@ -333,14 +345,16 @@ def create_sop_update_button(frame, row, label, sop_path, field_name, product_co
         if not product_code:
             messagebox.showwarning("警告", "請先輸入料號")
             return
-        updated_filename = handle_sop_update(product_code, sop_path, field_name, entry_widget, current_user)
+        product_name = product_name_entry.get().strip()
+        updated_filename = handle_sop_update(product_code, product_name, sop_path, field_name, entry_widget, current_user)
+
         if updated_filename:
             messagebox.showinfo("成功", f"已更新 {label} 檔案")
     btn = tk.Button(frame, text="更新", command=update_action)
     btn.grid(row=row, column=3, padx=5)
     return btn
 
-def create_upload_field_with_update(row, label, folder, field_name, form, product_code_entry, current_user, user_specialty, role, allowed_specialty):
+def create_upload_field_with_update(row, label, folder, field_name, form, product_code_entry, product_name_entry, current_user, user_specialty, role, allowed_specialty):
     tk.Label(form, text=label).grid(row=row, column=0, sticky="e")
     entry = tk.Entry(form, width=50)
     entry.grid(row=row, column=1)
@@ -353,10 +367,7 @@ def create_upload_field_with_update(row, label, folder, field_name, form, produc
 
     tk.Button(form, text="選擇檔案", command=browse).grid(row=row, column=2)
 
-    create_sop_update_button(
-        form, row, label, folder, field_name, product_code_entry,
-        entry, current_user, user_specialty, role, allowed_specialty
-    )
+    create_sop_update_button(form, row, label, folder, field_name, product_code_entry, product_name_entry, entry, current_user, user_specialty, role, allowed_specialty)
 
     return entry
 
@@ -469,11 +480,11 @@ def create_main_interface(root, db_name, login_info):
         entry_name = tk.Entry(form, width=50)
         entry_name.grid(row=1, column=1)
 
-        entry_dip = create_upload_field_with_update(2, "DIP SOP", DIP_SOP_PATH, "dip_sop", form, entry_code, current_user, login_info['specialty'], current_role, "dip")
-        entry_assembly = create_upload_field_with_update(3, "組裝SOP", ASSEMBLY_SOP_PATH, "assembly_sop", form, entry_code, current_user, login_info['specialty'], current_role, "assembly")
-        entry_test = create_upload_field_with_update(4, "測試SOP", TEST_SOP_PATH, "test_sop", form, entry_code, current_user, login_info['specialty'], current_role, "test")
-        entry_packaging = create_upload_field_with_update(5, "包裝SOP", PACKAGING_SOP_PATH, "packaging_sop", form, entry_code, current_user, login_info['specialty'], current_role, "packaging")
-        entry_oqc = create_upload_field_with_update(6, "檢查表OQC", OQC_PATH, "oqc_checklist", form, entry_code, current_user, login_info['specialty'], current_role, "oqc")
+        entry_dip = create_upload_field_with_update(2, "DIP SOP", DIP_SOP_PATH, "dip_sop", form, entry_code, entry_name, current_user, login_info['specialty'], current_role, "dip")
+        entry_assembly = create_upload_field_with_update(3, "組裝SOP", ASSEMBLY_SOP_PATH, "assembly_sop", form, entry_code, entry_name, current_user, login_info['specialty'], current_role, "assembly")
+        entry_test = create_upload_field_with_update(4, "測試SOP", TEST_SOP_PATH, "test_sop", form, entry_code, entry_name, current_user, login_info['specialty'], current_role, "test")
+        entry_packaging = create_upload_field_with_update(5, "包裝SOP", PACKAGING_SOP_PATH, "packaging_sop", form, entry_code, entry_name, current_user, login_info['specialty'], current_role, "packaging")
+        entry_oqc = create_upload_field_with_update(6, "檢查表OQC", OQC_PATH, "oqc_checklist", form, entry_code, entry_name, current_user, login_info['specialty'], current_role, "oqc")
 
         def save_data():
             code = entry_code.get().strip()
@@ -493,29 +504,43 @@ def create_main_interface(root, db_name, login_info):
                 if cursor.fetchone():
                     messagebox.showerror("錯誤", "料號已存在，請重新確認過。")
                     return
-
+                
+                role = login_info['role']
                 specialty = login_info['specialty']
-
                 d_path = a_path = t_path = p_path = o_path = None
 
-                if specialty == "dip":
-                    file = entry_dip.get().strip()
-                    d_path = save_file(file, DIP_SOP_PATH, current_user) if file else None
-                elif specialty == "assembly":
-                    file = entry_assembly.get().strip()
-                    a_path = save_file(file, ASSEMBLY_SOP_PATH, current_user) if file else None
-                elif specialty == "test":
-                    file = entry_test.get().strip()
-                    t_path = save_file(file, TEST_SOP_PATH, current_user) if file else None
-                elif specialty == "packaging":
-                    file = entry_packaging.get().strip()
-                    p_path = save_file(file, PACKAGING_SOP_PATH, current_user) if file else None
-                elif specialty == "oqc":
-                    file = entry_oqc.get().strip()
-                    o_path = save_file(file, OQC_PATH, current_user) if file else None
+                if role == "admin":
+                    d_file = entry_dip.get().strip()
+                    a_file = entry_assembly.get().strip()
+                    t_file = entry_test.get().strip()
+                    p_file = entry_packaging.get().strip()
+                    o_file = entry_oqc.get().strip()
+
+                    d_path = save_file(d_file, DIP_SOP_PATH, current_user) if d_file else None
+                    a_path = save_file(a_file, ASSEMBLY_SOP_PATH, current_user) if a_file else None
+                    t_path = save_file(t_file, TEST_SOP_PATH, current_user) if t_file else None
+                    p_path = save_file(p_file, PACKAGING_SOP_PATH, current_user) if p_file else None
+                    o_path = save_file(o_file, OQC_PATH, current_user) if o_file else None
+
                 else:
-                    messagebox.showerror("錯誤", "未知專長，無法上傳")
-                    return
+                    if specialty == "dip":
+                        file = entry_dip.get().strip()
+                        d_path = save_file(file, DIP_SOP_PATH, current_user) if file else None
+                    elif specialty == "assembly":
+                        file = entry_assembly.get().strip()
+                        a_path = save_file(file, ASSEMBLY_SOP_PATH, current_user) if file else None
+                    elif specialty == "test":
+                        file = entry_test.get().strip()
+                        t_path = save_file(file, TEST_SOP_PATH, current_user) if file else None
+                    elif specialty == "packaging":
+                        file = entry_packaging.get().strip()
+                        p_path = save_file(file, PACKAGING_SOP_PATH, current_user) if file else None
+                    elif specialty == "oqc":
+                        file = entry_oqc.get().strip()
+                        o_path = save_file(file, OQC_PATH, current_user) if file else None
+                    else:
+                        messagebox.showerror("錯誤", "未知專長，無法上傳")
+                        return
 
                 cursor.execute("""
                     INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
@@ -677,20 +702,21 @@ def create_main_interface(root, db_name, login_info):
                 for i in range(2, 7):
                     sop_path = row_display[i]
                     if sop_path:
+                        full_filename = os.path.basename(sop_path)
+                        filename_no_ext = os.path.splitext(full_filename)[0]
                         bypass_field = bypass_fields[i - 2]
                         cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
                         bypass = cursor.fetchone()
 
                         if bypass and bypass[0]:
-                            row_display[i] = f"（已停用） {product_code}{product_name} {timestamp}"
+                            row_display[i] = f"（已停用） {filename_no_ext}"
                         else:
-                            row_display[i] = f"{product_code}{product_name} {timestamp}"
+                            row_display[i] = filename_no_ext
                     else:
                         row_display[i] = ""
 
 
                 tree.insert('', tk.END, values=row_display, tags=("bypass",) if "（已停用）" in str(row_display) else "")
-
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -701,7 +727,9 @@ def create_main_interface(root, db_name, login_info):
         if col_index in range(2, 7):  
             filename = tree.item(item)['values'][col_index]
             if "（已停用）" in filename:
-                return
+                filename = filename.replace("（已停用） ", "")
+            filename = f"{filename}.pdf"
+
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
             full_path = os.path.join(base_paths[col_index - 2], filename)
             if os.path.exists(full_path):

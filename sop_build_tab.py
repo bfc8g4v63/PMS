@@ -223,10 +223,11 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
 
+            user_defined_name = entry_filename.get().strip()
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            final_filename = f"{timestamp}_{output_name}.pdf"
+            final_filename = f"{user_defined_name}_{timestamp}.pdf"
             save_path = os.path.join(save_dir, final_filename)
-
+            
             try:
                 merged_pdf = fitz.open()
                 skipped = []
@@ -256,7 +257,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
                 merged_pdf.close()
 
                 log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))#\n{save_path}
+                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))
 
                 if skipped:
                     skipped_str = "\n".join(skipped)
@@ -498,7 +499,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         for code, name in selected:
             try:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                new_name = f"{timestamp}_{code}_{name}.pdf"
+                new_name = f"{code}_{name}_{timestamp}.pdf"
                 dest_dir = SOP_SAVE_PATHS.get(dest_path_var.get())
                 dest_path = os.path.join(dest_dir, new_name)
                 shutil.copy(matched_main_path, dest_path)
