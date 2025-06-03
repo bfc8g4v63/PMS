@@ -223,11 +223,10 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
 
-            user_defined_name = entry_filename.get().strip()
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            final_filename = f"{user_defined_name}_{timestamp}.pdf"
+            final_filename = f"{timestamp}_{output_name}.pdf"
             save_path = os.path.join(save_dir, final_filename)
-            
+
             try:
                 merged_pdf = fitz.open()
                 skipped = []
@@ -257,7 +256,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
                 merged_pdf.close()
 
                 log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))
+                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))#\n{save_path}
 
                 if skipped:
                     skipped_str = "\n".join(skipped)
@@ -519,7 +518,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                             UPDATE issues
                             SET {field_name} = ?, created_at = ?
                             WHERE product_code = ?
-                        """, (dest_path, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), code))
+                        """, (new_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), code))
                         conn.commit()
 
                 log_activity(db_name, current_user.get("user"), "apply_sop", new_name, module="SOP套用")
