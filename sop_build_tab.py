@@ -65,7 +65,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             tk.Label(left, text="您沒有 SOP 上傳權限", fg="red").pack(pady=20)
             return
 
-    tk.Label(left, text="\nSOP 批量上傳區").pack(anchor="w")
+    #tk.Label(left, text="\nSOP 批量上傳區").pack(anchor="w")
     upload_frame = tk.Frame(left)
     upload_frame.pack(anchor="w", pady=5)
     tk.Button(upload_frame, text="選擇PDF檔案", command=lambda: select_upload_files()).pack(side="left")

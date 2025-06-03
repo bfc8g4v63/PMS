@@ -135,6 +135,20 @@ def build_log_view_tab(tab, db_name, role):
         for row in tree.get_children():
             tree.delete(row)
 
+
+        ACTION_MAP = {
+            "add_user": "新增使用者",
+            "update_user": "修改使用者",
+            "delete_user": "刪除使用者",
+            "upload": "上傳檔案",
+            "generate_sop": "生成 SOP",
+            "apply_sop": "套用 SOP",
+            "delete": "刪除紀錄",
+            "login": "登入系統",
+            "logout": "登出系統",
+            "change_password": "變更密碼",
+        }
+
         restricted_roles = ("engineer", "leader")
         restricted_keywords = ("add_user", "update_user", "delete_user")
 
@@ -144,7 +158,6 @@ def build_log_view_tab(tab, db_name, role):
             params = []
 
             if role in restricted_roles:
-
                 if keyword:
                     base_sql += " WHERE (username LIKE ? OR action LIKE ? OR filename LIKE ?) AND action NOT IN ({})".format(
                         ",".join("?" for _ in restricted_keywords)
@@ -162,8 +175,10 @@ def build_log_view_tab(tab, db_name, role):
 
             base_sql += f" ORDER BY timestamp {'DESC' if sort_desc.get() else 'ASC'}"
             cursor.execute(base_sql, params)
+
             for row in cursor.fetchall():
-                tree.insert("", "end", iid=row[0], values=row[1:])
+                action_display = ACTION_MAP.get(row[2], row[2])
+                tree.insert("", "end", iid=row[0], values=(row[1], action_display, row[3], row[4]))
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -340,58 +355,6 @@ def create_upload_field_with_update(row, label, folder, field_name, form, produc
 
 def build_password_change_tab(tab, db_name, current_user):
     tk.Label(tab, text="變更密碼",).pack(pady=(10, 5))
-
-    form = tk.Frame(tab)
-    form.pack(pady=10)
-
-    tk.Label(form, text="舊密碼：").grid(row=0, column=0, sticky="e", pady=5)
-    old_pass_entry = tk.Entry(form, show="*", width=30)
-    old_pass_entry.grid(row=0, column=1, padx=10)
-
-    tk.Label(form, text="新密碼：").grid(row=1, column=0, sticky="e", pady=5)
-    new_pass_entry = tk.Entry(form, show="*", width=30)
-    new_pass_entry.grid(row=1, column=1, padx=10)
-
-    tk.Label(form, text="確認新密碼：").grid(row=2, column=0, sticky="e", pady=5)
-    confirm_pass_entry = tk.Entry(form, show="*", width=30)
-    confirm_pass_entry.grid(row=2, column=1, padx=10)
-
-    def change_password():
-        old_pw = old_pass_entry.get().strip()
-        new_pw = new_pass_entry.get().strip()
-        confirm_pw = confirm_pass_entry.get().strip()
-
-        if not old_pw or not new_pw or not confirm_pw:
-            messagebox.showwarning("警告", "請填寫所有欄位")
-            return
-
-        if new_pw != confirm_pw:
-            messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
-            return
-        
-        if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pw):
-            messagebox.showerror("錯誤", "密碼須為6～12碼英文或數字組成")
-            return
-        
-        old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
-        new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
-
-        with sqlite3.connect(db_name) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
-            if not cursor.fetchone():
-                messagebox.showerror("錯誤", "舊密碼不正確")
-                return
-
-            cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, current_user))
-            conn.commit()
-
-        messagebox.showinfo("成功", "密碼已變更")
-        old_pass_entry.delete(0, tk.END)
-        new_pass_entry.delete(0, tk.END)
-        confirm_pass_entry.delete(0, tk.END)
-
-    tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
 
     form = tk.Frame(tab)
     form.pack(pady=10)
