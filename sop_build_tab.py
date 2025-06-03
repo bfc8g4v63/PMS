@@ -5,6 +5,7 @@ import os
 import sqlite3
 from tkinter import filedialog, messagebox, ttk
 import fitz
+import re
 from datetime import datetime
 from utils import log_activity #, open_file
 
@@ -205,26 +206,32 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         threading.Thread(target=generate_pdf_thread).start()
 
     def generate_pdf_thread():
-            output_name = entry_filename.get().strip()
-            if not output_name:
-                entry_filename.after(0, lambda: messagebox.showwarning("請輸入檔名", "請輸入儲檔名稱"))
-                return
-            if not selected_files:
-                entry_filename.after(0, lambda: messagebox.showwarning("未選擇內容", "請先選擇並排序要合併的 PDF"))
-                return
+        output_name = entry_filename.get().strip()
 
-            specialty_key = dest_path_var.get()
-            save_dir = SOP_SAVE_PATHS.get(specialty_key)
+        if not output_name:
+            entry_filename.after(0, lambda: messagebox.showwarning("請輸入檔名", "請輸入儲檔名稱"))
+            return
+        if not selected_files:
+            entry_filename.after(0, lambda: messagebox.showwarning("未選擇內容", "請先選擇並排序要合併的 PDF"))
+            return
 
-            if not save_dir:
-                entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"無法判定專長「{specialty_key}」的儲存路徑"))
-                return
+        # 新增：料號_品名 檢查
+        if not re.match(r"^\d{8,12}_.+$", output_name):
+            entry_filename.after(0, lambda: messagebox.showerror("錯誤", "請依格式輸入：料號_品名（例：12345678_產品名）"))
+            return
 
-            if not os.path.exists(save_dir):
-                os.makedirs(save_dir)
+        specialty_key = dest_path_var.get()
+        save_dir = SOP_SAVE_PATHS.get(specialty_key)
+
+        if not save_dir:
+            entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"無法判定專長「{specialty_key}」的儲存路徑"))
+            return
+
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
 
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            final_filename = f"{timestamp}_{output_name}.pdf"
+            final_filename = f"{output_name}_{timestamp}.pdf"
             save_path = os.path.join(save_dir, final_filename)
 
             try:
