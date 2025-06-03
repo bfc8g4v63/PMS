@@ -36,9 +36,15 @@ SOP_FIELDS = {
     "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC")
 }
 
-BASE_SHARE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
-ORIGINAL_DB = os.path.join(BASE_SHARE, "PMS.db")
-DB_NAME     = ORIGINAL_DB
+USE_LOCAL_DB = True
+
+LOCAL_DB_PATH = r"C:\Users\user\Desktop\Nelson\Dev\GitHub\PMS\PMS.db"
+NETWORK_DB_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
+
+DB_NAME = LOCAL_DB_PATH if USE_LOCAL_DB else NETWORK_DB_PATH
+
+print(f"目前使用的資料庫：{DB_NAME}")
+
 
 DIP_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\DIP_SOP"
 ASSEMBLY_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\組裝SOP"
@@ -66,14 +72,15 @@ def init_db():
         conn.execute("PRAGMA journal_mode=WAL")
 
 def sync_back_to_server():
-    if DB_NAME == ORIGINAL_DB:
+    if not USE_LOCAL_DB:
         print("無需回寫資料庫，因為 DB 實體與操作一致")
         return
     try:
-        shutil.copy(DB_NAME, ORIGINAL_DB)
+        shutil.copy(DB_NAME, NETWORK_DB_PATH)
         print("已同步本機資料庫回網路磁碟")
     except Exception as e:
         print(f"資料回寫失敗: {e}")
+
 
 def logout_and_exit(root):
     global _instance_lock
@@ -383,11 +390,15 @@ def build_password_change_tab(tab, db_name, current_user):
         if new_pw != confirm_pw:
             messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
             return
-
+        
+        if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pw):
+            messagebox.showerror("錯誤", "密碼須為6～12碼英文或數字組成")
+            return
+        
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
-        with sqlite3.connect(db_name) as conn:  
+        with sqlite3.connect(db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
             if not cursor.fetchone():
@@ -401,8 +412,6 @@ def build_password_change_tab(tab, db_name, current_user):
         old_pass_entry.delete(0, tk.END)
         new_pass_entry.delete(0, tk.END)
         confirm_pass_entry.delete(0, tk.END)
-
-    tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
 
 def create_main_interface(root, db_name, login_info):
     current_user = login_info['user']
@@ -485,18 +494,43 @@ def create_main_interface(root, db_name, login_info):
                     messagebox.showerror("錯誤", "料號已存在，請重新確認過。")
                     return
 
-                d_path = save_file(entry_dip.get().strip(), DIP_SOP_PATH, current_user)
-                a_path = save_file(entry_assembly.get().strip(), ASSEMBLY_SOP_PATH, current_user)
-                t_path = save_file(entry_test.get().strip(), TEST_SOP_PATH, current_user)
-                p_path = save_file(entry_packaging.get().strip(), PACKAGING_SOP_PATH, current_user)
-                o_path = save_file(entry_oqc.get().strip(), OQC_PATH, current_user)
+                specialty = login_info['specialty']
+
+                d_path = a_path = t_path = p_path = o_path = None
+
+                if specialty == "dip":
+                    file = entry_dip.get().strip()
+                    d_path = save_file(file, DIP_SOP_PATH, current_user) if file else None
+                elif specialty == "assembly":
+                    file = entry_assembly.get().strip()
+                    a_path = save_file(file, ASSEMBLY_SOP_PATH, current_user) if file else None
+                elif specialty == "test":
+                    file = entry_test.get().strip()
+                    t_path = save_file(file, TEST_SOP_PATH, current_user) if file else None
+                elif specialty == "packaging":
+                    file = entry_packaging.get().strip()
+                    p_path = save_file(file, PACKAGING_SOP_PATH, current_user) if file else None
+                elif specialty == "oqc":
+                    file = entry_oqc.get().strip()
+                    o_path = save_file(file, OQC_PATH, current_user) if file else None
+                else:
+                    messagebox.showerror("錯誤", "未知專長，無法上傳")
+                    return
 
                 cursor.execute("""
                     INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (code, name, os.path.join(DIP_SOP_PATH, d_path), os.path.join(ASSEMBLY_SOP_PATH, a_path),
-                    os.path.join(TEST_SOP_PATH, t_path), os.path.join(PACKAGING_SOP_PATH, p_path),
-                    os.path.join(OQC_PATH, o_path), current_user, datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+                """, (
+                    code, 
+                    name,
+                    os.path.join(DIP_SOP_PATH, d_path) if d_path else None,
+                    os.path.join(ASSEMBLY_SOP_PATH, a_path) if a_path else None,
+                    os.path.join(TEST_SOP_PATH, t_path) if t_path else None,
+                    os.path.join(PACKAGING_SOP_PATH, p_path) if p_path else None,
+                    os.path.join(OQC_PATH, o_path) if o_path else None,
+                    current_user, 
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                ))
                 conn.commit()
 
             messagebox.showinfo("成功", "已新增紀錄")
