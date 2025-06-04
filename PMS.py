@@ -50,6 +50,35 @@ LOG_TABLE = "activity_logs"
 
 _instance_lock = None
 
+def is_valid_pdf(file_path):
+    try:
+        with open(file_path, 'rb') as f:
+            header = f.read(5)
+            return header == b'%PDF-'
+    except:
+        return False
+
+def save_file_if_exist(file_path, target_folder, username, product_code, product_name):
+    if not file_path:
+        return "", ""
+
+    if not is_valid_pdf(file_path):
+        messagebox.showerror("錯誤", f"這個檔案不是合法的 PDF 檔案：{file_path}")
+        return "", ""
+
+    timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    safe_name = product_name.replace("/", "-").replace("\\", "-")
+    filename = f"{product_code}_{safe_name}_{timestamp}.pdf"
+    target_path = os.path.join(target_folder, filename)
+
+    try:
+        shutil.copy(file_path, target_path)
+        log_activity(DB_NAME, username, "upload", filename, module="生產資訊")
+        return filename, timestamp
+    except Exception as e:
+        print(f"檔案儲存失敗: {e}")
+        return "", ""
+
 def is_another_instance_running():
     global _instance_lock
     try:
@@ -286,22 +315,19 @@ def initialize_database():
 
     auto_add_missing_columns(DB_NAME, get_required_columns())
 
-def save_file(file_path, target_folder, username, product_code=None, product_name=None):
+def save_file(file_path, target_folder, username, product_code=None, product_name=None, log=True):
     if not os.path.exists(file_path):
         return ""
 
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    
-    if product_code and product_name:
-        safe_name = product_name.replace("/", "-").replace("\\", "-")
-        filename = f"{product_code}_{safe_name}_{timestamp}.pdf"
-    else:
-        filename = f"{timestamp}_{os.path.basename(file_path)}"
-    
+    safe_name = product_name.replace("/", "-").replace("\\", "-")
+    filename = f"{product_code}_{safe_name}_{timestamp}.pdf"
     target_path = os.path.join(target_folder, filename)
+
     try:
         shutil.copy(file_path, target_path)
-        log_activity(DB_NAME, username, "upload", target_path, module="生產資訊")
+        if log:
+            log_activity(DB_NAME, username, "新增SOP", filename, module="生產資訊")
         return filename
     except Exception as e:
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
@@ -316,7 +342,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     if not path:
         return None
 
-    display_name, _ = save_file(path, sop_path, current_user, product_code, product_name)
+    display_name = save_file(path, sop_path, current_user, product_code, product_name, log=False)
 
     if not display_name:
         return None
@@ -328,6 +354,9 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
             messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法更新！")
             return
         conn.commit()
+
+    log_activity(DB_NAME, current_user, "更新SOP", display_name, module="生產資訊")
+
     return display_name
 
 
@@ -702,12 +731,15 @@ def create_main_interface(root, db_name, login_info):
             if not target_field:
                 return
             
+            base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
             with sqlite3.connect(DB_NAME) as conn:
                 cursor = conn.cursor()
                 cursor.execute(f"SELECT {target_field} FROM issues WHERE product_code=?", (product_code,))
                 result = cursor.fetchone()
                 if result and result[0]:
-                    full_path = result[0]
+                    filename = result[0]
+                    sop_folder = base_paths[col_index - 2]
+                    full_path = os.path.join(sop_folder, filename)
                     if os.path.exists(full_path):
                         open_file(full_path)
                     else:

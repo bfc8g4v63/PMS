@@ -17,6 +17,16 @@ def open_file(filepath):
         messagebox.showerror("錯誤", f"無法開啟檔案: {e}")
 
 def log_activity(db_name, user, action, filename, module=None):
+    if module == "生產資訊" and filename:
+        if filename:
+            if filename.lower().endswith('.pdf'):
+                filename_no_ext = filename[:-4]
+            else:
+                filename_no_ext = filename
+            if "_" in filename_no_ext:
+                last_underscore = filename_no_ext.rfind("_")
+                if last_underscore != -1:
+                    filename = filename_no_ext[:last_underscore]
     with sqlite3.connect(db_name) as conn:
         cursor = conn.cursor()
         cursor.execute("""
