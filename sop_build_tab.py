@@ -215,7 +215,6 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             entry_filename.after(0, lambda: messagebox.showwarning("未選擇內容", "請先選擇並排序要合併的 PDF"))
             return
 
-        # 新增：料號_品名 檢查
         if not re.match(r"^\d{8,12}_.+$", output_name):
             entry_filename.after(0, lambda: messagebox.showerror("錯誤", "請依格式輸入：料號_品名（例：12345678_產品名）"))
             return
@@ -230,7 +229,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
             final_filename = f"{output_name}_{timestamp}.pdf"
             save_path = os.path.join(save_dir, final_filename)
 
@@ -504,7 +503,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         total = len(selected)
         for code, name in selected:
             try:
-                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
                 new_name = f"{code}_{name}_{timestamp}.pdf"
                 dest_dir = SOP_SAVE_PATHS.get(dest_path_var.get())
                 dest_path = os.path.join(dest_dir, new_name)
@@ -525,7 +524,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                             UPDATE issues
                             SET {field_name} = ?, created_at = ?
                             WHERE product_code = ?
-                        """, (new_name, datetime.now().strftime('%Y-%m-%d %H:%M:%S'), code))
+                        """, (new_name, datetime.now().strftime("%Y%m%dT%H%M%S"), code))
                         conn.commit()
 
                 log_activity(db_name, current_user.get("user"), "apply_sop", new_name, module="SOP套用")
