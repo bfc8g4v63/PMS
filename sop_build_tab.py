@@ -7,7 +7,8 @@ from tkinter import filedialog, messagebox, ttk
 import fitz
 import re
 from datetime import datetime
-from utils import log_activity #, open_file
+from utils import log_activity
+
 
 UPLOAD_PATHS = {
     "dip": r"\\192.120.100.177\工程部\生產管理\SOP生成\DIP",
@@ -65,8 +66,10 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         if not search_path:
             tk.Label(left, text="您沒有 SOP 上傳權限", fg="red").pack(pady=20)
             return
-
-    #tk.Label(left, text="\nSOP 批量上傳區").pack(anchor="w")
+    
+    title_font = ("Arial", 10, "bold")
+    tk.Label(left, text="📄 SOP 生成區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
+    tk.Label(left, text="\nSOP 拼圖上傳").pack(anchor="w")
     upload_frame = tk.Frame(left)
     upload_frame.pack(anchor="w", pady=5)
     tk.Button(upload_frame, text="選擇PDF檔案", command=lambda: select_upload_files()).pack(side="left")
@@ -115,7 +118,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         selected_uploads.clear()
         refresh_upload_list()
 
-    tk.Label(left, text="SOP 拼圖搜尋區").pack(anchor="w", pady=(15, 0))
+    tk.Label(left, text="SOP 拼圖區").pack(anchor="w", pady=(15, 0))
     search_frame = tk.Frame(left)
     search_frame.pack(anchor="w")
     entry_keyword = tk.Entry(search_frame, width=40)
@@ -262,7 +265,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
                 merged_pdf.close()
 
                 log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))#\n{save_path}
+                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))
 
                 if skipped:
                     skipped_str = "\n".join(skipped)
@@ -290,6 +293,8 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     status_label.pack(anchor="w", pady=2)
 
 def build_sop_apply_section(parent_frame, current_user, db_name):
+    title_font = ("Arial", 10, "bold")
+    tk.Label(parent_frame, text="📚 SOP 套用區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
     role = current_user.get("role", "")
     specialty = current_user.get("specialty", "").lower()
 

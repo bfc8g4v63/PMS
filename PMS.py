@@ -8,7 +8,7 @@ import socket
 import re
 import shutil
 import atexit
-#import tempfile
+
 
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
@@ -66,14 +66,21 @@ def save_file_if_exist(file_path, target_folder, username, product_code, product
         messagebox.showerror("錯誤", f"這個檔案不是合法的 PDF 檔案：{file_path}")
         return "", ""
 
+    if not product_name:
+        messagebox.showerror("錯誤", f"品名為空，無法正確生成檔名")
+        return "", ""
+
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    safe_name = product_name.replace("/", "-").replace("\\", "-")
+    safe_name = product_name.replace("/", "-").replace("\\", "-").strip()
+    if not safe_name:
+        messagebox.showerror("錯誤", f"品名不合法，無法正確生成檔名")
+        return "", ""
+
     filename = f"{product_code}_{safe_name}_{timestamp}.pdf"
     target_path = os.path.join(target_folder, filename)
 
     try:
         shutil.copy(file_path, target_path)
-        log_activity(DB_NAME, username, "upload", filename, module="生產資訊")
         return filename, timestamp
     except Exception as e:
         print(f"檔案儲存失敗: {e}")
@@ -169,7 +176,7 @@ def build_log_view_tab(tab, db_name, role):
             "add_user": "新增使用者",
             "update_user": "修改使用者",
             "delete_user": "刪除使用者",
-            "upload": "上傳檔案",
+            "upload": "新增SOP",
             "generate_sop": "生成 SOP",
             "apply_sop": "套用 SOP",
             "delete": "刪除紀錄",
@@ -354,6 +361,8 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
             messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法更新！")
             return
         conn.commit()
+    safe_name = product_name.replace("/", "-").replace("\\", "-").strip()
+    log_filename = f"{product_code}_{safe_name}"
 
     log_activity(DB_NAME, current_user, "更新SOP", display_name, module="生產資訊")
 
@@ -606,6 +615,7 @@ def create_main_interface(root, db_name, login_info):
     tree.tag_configure("bypass", foreground="red")
 
     if current_role == "admin":
+
         def delete_selected():
             selected_items = tree.selection()
             if not selected_items:
@@ -915,7 +925,7 @@ if __name__ == "__main__":
     if login_info and login_info.get("user"):
         root = tk.Tk()
         root.title("生產管理平台")
-        root.geometry("1000x750")
+        root.geometry("1030x750")
 
         IDLE_TIMEOUT_MS = 3 * 60 * 1000
 

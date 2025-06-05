@@ -16,8 +16,24 @@ def open_file(filepath):
     except Exception as e:
         messagebox.showerror("錯誤", f"無法開啟檔案: {e}")
 
+ACTION_MAP = {
+    "add_user": "新增使用者",
+    "update_user": "修改使用者",
+    "delete_user": "刪除使用者",
+    "upload": "新增 SOP",
+    "generate_sop": "生成 SOP",
+    "apply_sop": "套用 SOP",
+    "delete": "刪除紀錄",
+    "login": "登入系統",
+    "logout": "登出系統",
+    "change_password": "變更密碼",
+    "更新SOP": "更新 SOP",
+}
+
 def log_activity(db_name, user, action, filename, module=None):
-    if module == "生產資訊" and filename:
+    action_display = ACTION_MAP.get(action, action) 
+    if module in ["生產資訊", "SOP生成", "SOP套用"] and filename:
+
         if filename:
             if filename.lower().endswith('.pdf'):
                 filename_no_ext = filename[:-4]
@@ -27,6 +43,7 @@ def log_activity(db_name, user, action, filename, module=None):
                 last_underscore = filename_no_ext.rfind("_")
                 if last_underscore != -1:
                     filename = filename_no_ext[:last_underscore]
+
     with sqlite3.connect(db_name) as conn:
         cursor = conn.cursor()
         cursor.execute("""
