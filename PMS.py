@@ -925,7 +925,7 @@ if __name__ == "__main__":
     if login_info and login_info.get("user"):
         root = tk.Tk()
         root.title("生產管理平台")
-        root.geometry("1030x750")
+        root.geometry("1200x750")
 
         IDLE_TIMEOUT_MS = 3 * 60 * 1000
 
