@@ -1,9 +1,9 @@
 import sqlite3
-from datetime import datetime
 import os
 import subprocess
 import sys
 from tkinter import messagebox
+from datetime import datetime
 
 def open_file(filepath):
     try:
@@ -31,19 +31,7 @@ ACTION_MAP = {
 }
 
 def log_activity(db_name, user, action, filename, module=None):
-    action_display = ACTION_MAP.get(action, action) 
-    if module in ["生產資訊", "SOP生成", "SOP套用"] and filename:
-
-        if filename:
-            if filename.lower().endswith('.pdf'):
-                filename_no_ext = filename[:-4]
-            else:
-                filename_no_ext = filename
-            if "_" in filename_no_ext:
-                last_underscore = filename_no_ext.rfind("_")
-                if last_underscore != -1:
-                    filename = filename_no_ext[:last_underscore]
-
+    action_display = ACTION_MAP.get(action, action)
     with sqlite3.connect(db_name) as conn:
         cursor = conn.cursor()
         cursor.execute("""

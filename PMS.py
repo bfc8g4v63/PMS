@@ -163,7 +163,11 @@ def build_log_view_tab(tab, db_name, role):
     tree = ttk.Treeview(tab, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
-        tree.column(col, width=150)
+        tree.column("使用者", width=80)
+        tree.column("動作", width=60)
+        tree.column("檔案名稱", width=300)
+        tree.column("時間", width=80)
+
     tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     def refresh_logs():
@@ -349,6 +353,16 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     if not path:
         return None
 
+    with sqlite3.connect(DB_NAME) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT product_name FROM issues WHERE product_code=?", (product_code,))
+        result = cursor.fetchone()
+        if result:
+            product_name = result[0]
+        else:
+            messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法補上品名。")
+            return None
+
     display_name = save_file(path, sop_path, current_user, product_code, product_name, log=False)
 
     if not display_name:
@@ -361,8 +375,6 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
             messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法更新！")
             return
         conn.commit()
-    safe_name = product_name.replace("/", "-").replace("\\", "-").strip()
-    log_filename = f"{product_code}_{safe_name}"
 
     log_activity(DB_NAME, current_user, "更新SOP", display_name, module="生產資訊")
 
@@ -545,6 +557,17 @@ def create_main_interface(root, db_name, login_info):
                 t_file, t_time = save_file_if_exist(entry_test.get().strip(), TEST_SOP_PATH, current_user, code, name)
                 p_file, p_time = save_file_if_exist(entry_packaging.get().strip(), PACKAGING_SOP_PATH, current_user, code, name)
                 o_file, o_time = save_file_if_exist(entry_oqc.get().strip(), OQC_PATH, current_user, code, name)
+
+                if d_file:
+                    log_activity(db_name, current_user, "新增SOP", d_file, module="生產資訊")
+                if a_file:
+                    log_activity(db_name, current_user, "新增SOP", a_file, module="生產資訊")
+                if t_file:
+                    log_activity(db_name, current_user, "新增SOP", t_file, module="生產資訊")
+                if p_file:
+                    log_activity(db_name, current_user, "新增SOP", p_file, module="生產資訊")
+                if o_file:
+                    log_activity(db_name, current_user, "新增SOP", o_file, module="生產資訊")
 
                 cursor.execute("""
                     INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)

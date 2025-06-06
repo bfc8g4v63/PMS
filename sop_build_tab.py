@@ -232,49 +232,49 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
 
-            timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-            final_filename = f"{output_name}_{timestamp}.pdf"
-            save_path = os.path.join(save_dir, final_filename)
+        timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+        final_filename = f"{output_name}_{timestamp}.pdf"
+        save_path = os.path.join(save_dir, final_filename)
 
-            try:
-                merged_pdf = fitz.open()
-                skipped = []
-                source_dir = UPLOAD_PATHS.get(dest_path_var.get())
-                total_files = len(selected_files)
+        try:
+            merged_pdf = fitz.open()
+            skipped = []
+            source_dir = UPLOAD_PATHS.get(dest_path_var.get())
+            total_files = len(selected_files)
 
-                def update_progress(value, text):
-                    progress_bar.after(0, lambda: progress_var.set(value))
-                    status_label.after(0, lambda: status_var.set(text))
+            def update_progress(value, text):
+                progress_bar.after(0, lambda: progress_var.set(value))
+                status_label.after(0, lambda: status_var.set(text))
 
-                update_progress(0, "開始合併 PDF...")
+            update_progress(0, "開始合併 PDF...")
 
-                for i, f in enumerate(selected_files):
-                    full_path = os.path.join(source_dir, f)
-                    if os.path.exists(full_path):
-                        doc = fitz.open(full_path)
-                        merged_pdf.insert_pdf(doc)
-                        doc.close()
-                    else:
-                        skipped.append(f)
+            for i, f in enumerate(selected_files):
+                full_path = os.path.join(source_dir, f)
+                if os.path.exists(full_path):
+                    doc = fitz.open(full_path)
+                    merged_pdf.insert_pdf(doc)
+                    doc.close()
+                else:
+                    skipped.append(f)
 
-                    progress = (i + 1) / total_files * 100
-                    update_progress(progress, f"處理中: {f}")
+                progress = (i + 1) / total_files * 100
+                update_progress(progress, f"處理中: {f}")
 
-                update_progress(100, "完成合併，儲存中...")
-                merged_pdf.save(save_path)
-                merged_pdf.close()
+            update_progress(100, "完成合併，儲存中...")
+            merged_pdf.save(save_path)
+            merged_pdf.close()
 
-                log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-                entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))
+            log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
+            entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))
 
-                if skipped:
-                    skipped_str = "\n".join(skipped)
-                    entry_filename.after(0, lambda: messagebox.showwarning("部分檔案遺失", f"以下檔案未找到，未合併:\n{skipped_str}"))
+            if skipped:
+                skipped_str = "\n".join(skipped)
+                entry_filename.after(0, lambda: messagebox.showwarning("部分檔案遺失", f"以下檔案未找到，未合併:\n{skipped_str}"))
 
-                update_progress(100, "SOP 生成完成 ✔")
+            update_progress(100, "SOP 生成完成 ✔")
 
-            except Exception as e:
-                entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"儲存失敗: {e}"))
+        except Exception as e:
+            entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"儲存失敗: {e}"))
 
     tk.Label(left, text="存檔名稱：").pack(anchor="w")
 
@@ -466,12 +466,12 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         if role == "engineer" and not specialty:
             messagebox.showerror("權限限制", "您僅有查閱權限，無法執行 SOP 套用。")
             return
-    
+
         specialty_key = dest_path_var.get()
         if not allow_all and specialty_key != specialty:
             messagebox.showerror("錯誤", f"您只能操作自己的專長：{specialty}，目前選擇的是 {specialty_key}")
             return
-        
+
         main_filename = source_var.get()
         if not main_filename:
             messagebox.showerror("錯誤", "請先指定資料來源")
@@ -488,11 +488,6 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
             messagebox.showerror("錯誤", "找不到對應的資料來源原始路徑")
             return
 
-        specialty_key = dest_path_var.get()
-        if not allow_all and specialty != specialty_key:
-            messagebox.showerror("錯誤", "無法套用至非本專長的分類")
-            return
-
         selected = [(code, name) for (code, name), v in zip(apply_items, apply_checks) if v.get()]
         if not selected:
             messagebox.showinfo("提示", "請勾選至少一筆套用資料")
@@ -506,35 +501,48 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
 
         count = 0
         total = len(selected)
+
+        field_map = {
+            "dip": "dip_sop",
+            "assembly": "assembly_sop",
+            "test": "test_sop",
+            "packaging": "packaging_sop",
+            "oqc": "oqc_checklist"
+        }
+        field_name = field_map.get(specialty_key)
+
+        if not field_name:
+            messagebox.showerror("錯誤", f"無法決定 {specialty_key} 的資料欄位")
+            return
+
+        dest_dir = SOP_SAVE_PATHS.get(specialty_key)
+        if not dest_dir:
+            messagebox.showerror("錯誤", f"無法決定 {specialty_key} 的儲存路徑")
+            return
+
         for code, name in selected:
             try:
                 timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-                new_name = f"{code}_{name}_{timestamp}.pdf"
-                dest_dir = SOP_SAVE_PATHS.get(dest_path_var.get())
-                dest_path = os.path.join(dest_dir, new_name)
+                base_name = f"{code}_{name}_{timestamp}"
+                display_name = base_name + ".pdf"
+
+                dest_path = os.path.join(dest_dir, display_name)
                 shutil.copy(matched_main_path, dest_path)
 
-                field_map = {
-                    "dip": "dip_sop",
-                    "assembly": "assembly_sop",
-                    "test": "test_sop",
-                    "packaging": "packaging_sop",
-                    "oqc": "oqc_checklist"
-                }
-                field_name = field_map.get(specialty.lower())
-                if field_name:
-                    with sqlite3.connect(db_name) as conn:
-                        cursor = conn.cursor()
-                        cursor.execute(f"""
-                            UPDATE issues
-                            SET {field_name} = ?, created_at = ?
-                            WHERE product_code = ?
-                        """, (new_name, datetime.now().strftime("%Y%m%dT%H%M%S"), code))
-                        conn.commit()
+                with sqlite3.connect(db_name) as conn:
+                    cursor = conn.cursor()
+                    cursor.execute(f"""
+                        UPDATE issues
+                        SET {field_name} = ?, created_at = ?
+                        WHERE product_code = ?
+                    """, (display_name, timestamp, code))
+                    conn.commit()
 
-                log_activity(db_name, current_user.get("user"), "apply_sop", new_name, module="SOP套用")
+                log_activity(db_name, current_user.get("user"), "apply_sop", display_name, module="SOP套用")
+
                 count += 1
-                update_progress(int(count / total * 100), f"套用中：{new_name}")
+                update_progress(int(count / total * 100), f"套用中：{display_name}")
+
             except Exception as e:
                 messagebox.showerror("錯誤", f"處理 {code}_{name} 失敗：{e}")
 
@@ -544,8 +552,12 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         search_apply_files()
 
     progress_var = tk.DoubleVar()
-    progress_bar = ttk.Progressbar(main_wrapper, variable=progress_var, maximum=100, length=300)
-    progress_bar.pack(anchor="w", padx=10, pady=(5, 0))
+    progress_frame = tk.Frame(main_wrapper)
+    progress_frame.pack(anchor="w", padx=10, pady=(5, 0))
+
+    progress_bar = ttk.Progressbar(progress_frame, variable=progress_var, maximum=100, length=300)
+    progress_bar.pack(side="left")
+
     status_var = tk.StringVar(value="等待操作")
-    status_label = tk.Label(main_wrapper, textvariable=status_var, fg="blue")
-    status_label.pack(anchor="w", padx=10, pady=2)
+    status_label = tk.Label(progress_frame, textvariable=status_var, fg="blue")
+    status_label.pack(side="left", padx=(10, 0))
