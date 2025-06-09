@@ -32,7 +32,8 @@ ACTION_MAP = {
 
 def log_activity(db_name, user, action, filename, module=None):
     action_display = ACTION_MAP.get(action, action)
-    with sqlite3.connect(db_name) as conn:
+    with sqlite3.connect(db_name, timeout=10) as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO activity_logs (username, action, filename, timestamp, module)

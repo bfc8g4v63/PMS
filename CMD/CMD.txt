@@ -1,0 +1,37 @@
+WIN+R>CMD
+
+#安裝打包工具
+pip install pyinstaller
+
+#安裝 需求清單中工具
+cd + 此檔案路徑
+pip install -r requirements.txt
+
+#打包.exe無bash
+湳ˋ
+
+#選配不要產生暫存檔案
+rmdir /s /q build
+
+#支持多媒體開發框架
+pip install pygame
+
+#更新pip version
+python.exe -m pip install --upgrade pip
+
+#安裝Venv(虛擬環境)
+VS CODE
+Ctrl + Shift + P
+
+輸入：Python: Select Interpreter
+
+選擇 .venv 裡的那一個
+
+安裝的是全域 Python，現在開的專案是用 .venv（虛擬環境），這兩個環境彼此獨立，互不共用模組。
+---------------------------------------
+
+#指定安裝Pandas 1.3.5
+pip install pandas==1.3.5
+
+SQLite
+C:\Users\user\Desktop\Nelson\Dev\GitHub\Troubleshooting platform>C:\Users\user\Desktop\Nelson\Dev\GitHub\Tool\sqlite-tools-win-x64-3490100\sqlite3.exe troubleshooting.db

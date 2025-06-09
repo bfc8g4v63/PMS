@@ -384,11 +384,12 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         terms_and = [t.strip() for t in keyword.split('&')] if '&' in keyword else []
         terms_or = [t.strip() for t in keyword.split('/')] if '/' in keyword else []
         
-        conn = sqlite3.connect(db_name)
-        cursor = conn.cursor()
-        cursor.execute("SELECT product_code, product_name FROM issues")
-        all_data = cursor.fetchall()
-        conn.close()
+        with sqlite3.connect(db_name, timeout=5) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            cursor = conn.cursor()
+            cursor.execute("SELECT product_code, product_name FROM issues")
+            all_data = cursor.fetchall()
+            conn.close()
 
         for code, name in all_data:
             combined = f"{code}_{name}".lower()
@@ -529,7 +530,8 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                 dest_path = os.path.join(dest_dir, display_name)
                 shutil.copy(matched_main_path, dest_path)
 
-                with sqlite3.connect(db_name) as conn:
+                with sqlite3.connect(db_name, timeout=10) as conn:
+                    conn.execute("PRAGMA journal_mode=WAL;")
                     cursor = conn.cursor()
                     cursor.execute(f"""
                         UPDATE issues
