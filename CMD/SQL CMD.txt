@@ -1,6 +1,0 @@
-.open C:\Users\user\Desktop\Nelson\Dev\GitHub\PMS\PMS.db
-.tables
-.schema
-.quit
-
-ALTER TABLE users ADD COLUMN specialty TEXT;
