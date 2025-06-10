@@ -100,7 +100,7 @@ def is_another_instance_running():
 def init_db():
     if os.path.exists(DB_NAME) and not os.access(DB_NAME, os.R_OK | os.W_OK):
         raise IOError(f"無法讀寫資料庫檔案：{DB_NAME}")
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_NAME, timeout=5) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
 
 def sync_back_to_server():
@@ -196,6 +196,7 @@ def build_log_view_tab(tab, db_name, role):
 
         with sqlite3.connect(db_name, timeout=5) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             cursor = conn.cursor()
             base_sql = "SELECT id, username, action, filename, timestamp FROM activity_logs"
             params = []
@@ -257,6 +258,7 @@ def build_log_view_tab(tab, db_name, role):
                     for iid in selected:
                         cursor.execute("DELETE FROM activity_logs WHERE id=?", (iid,))
                     conn.commit()
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 refresh_logs()
 
         def delete_all_logs():
@@ -266,6 +268,7 @@ def build_log_view_tab(tab, db_name, role):
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM activity_logs")
                     conn.commit()
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 refresh_logs()
 
         tk.Button(button_frame, text="刪除所選", command=delete_selected_log).pack(side="left", padx=5)
@@ -324,7 +327,7 @@ def initialize_database():
         """)
 
         conn.commit()
-
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
     print("資料庫初始化完成，實際位置：", DB_NAME)
 
     if hasattr(os, "sync"):
@@ -383,6 +386,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
             messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法更新！")
             return
         conn.commit()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
     log_activity(DB_NAME, current_user, "更新SOP", display_name, module="生產資訊")
 
@@ -472,6 +476,7 @@ def build_password_change_tab(tab, db_name, current_user):
 
             cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, current_user))
             conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
         messagebox.showinfo("成功", "密碼已變更")
         old_pass_entry.delete(0, tk.END)
@@ -589,7 +594,7 @@ def create_main_interface(root, db_name, login_info):
                     datetime.now().strftime("%Y%m%dT%H%M%S")
                 ))
                 conn.commit()
-
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             messagebox.showinfo("成功", "已新增紀錄")
             for e in [entry_code, entry_name, entry_dip, entry_assembly, entry_test, entry_packaging, entry_oqc]:
                 e.delete(0, tk.END)
@@ -664,6 +669,7 @@ def create_main_interface(root, db_name, login_info):
                         cursor.execute("DELETE FROM issues WHERE product_code=?", (product_code,))
                         deleted_items.append(product_code)
                     conn.commit()
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 for code in deleted_items:
                     log_activity(DB_NAME, current_user, "delete", code, module="生產資訊")
 
@@ -683,7 +689,7 @@ def create_main_interface(root, db_name, login_info):
 
         with sqlite3.connect(db_name, timeout=5) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);") 
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             cursor = conn.cursor()
 
             base_query = """
@@ -748,9 +754,7 @@ def create_main_interface(root, db_name, login_info):
                     else:
                         row_display[i] = ""
 
-
                 tree.insert('', tk.END, values=row_display, tags=("bypass",) if "（已停用）" in str(row_display) else "")
-
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -821,7 +825,7 @@ def create_main_interface(root, db_name, login_info):
                 (new_value, product_code)
             )
             conn.commit()
-
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
         query_data()
 
 def login():
@@ -850,6 +854,7 @@ def login():
 
         with sqlite3.connect(DB_NAME) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             c = conn.cursor()
             c.execute("""
                 SELECT role, can_add, can_delete, specialty,
@@ -945,7 +950,7 @@ def open_password_change_window(parent, db_name, username):
 
             cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, username))
             conn.commit()
-
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
         messagebox.showinfo("成功", "密碼已變更")
         win.destroy()
 

@@ -386,10 +386,11 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         
         with sqlite3.connect(db_name, timeout=5) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             cursor = conn.cursor()
             cursor.execute("SELECT product_code, product_name FROM issues")
             all_data = cursor.fetchall()
-            conn.close()
+            #conn.close()
 
         for code, name in all_data:
             combined = f"{code}_{name}".lower()
@@ -539,7 +540,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                         WHERE product_code = ?
                     """, (display_name, timestamp, code))
                     conn.commit()
-
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 log_activity(db_name, current_user.get("user"), "apply_sop", display_name, module="SOP套用")
 
                 count += 1

@@ -40,3 +40,4 @@ def log_activity(db_name, user, action, filename, module=None):
             VALUES (?, ?, ?, ?, ?)
         """, (user, action, filename, datetime.now().strftime("%Y%m%dT%H%M%S"), module))
         conn.commit()
+        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")

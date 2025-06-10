@@ -48,6 +48,7 @@ def build_user_management_tab(tab, db_name, current_user):
             tree.delete(row)
         with sqlite3.connect(db_name, timeout=5) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             cursor = conn.cursor()
             sql = """SELECT username, role, can_add, can_delete, active,
                 can_upload_sop, can_view_logs, can_delete_logs,
@@ -151,6 +152,7 @@ def build_user_management_tab(tab, db_name, current_user):
             cursor.execute(sql, values)
 
             conn.commit()
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
         messagebox.showinfo("成功", "使用者已新增")
         log_activity(db_name, current_user, "add_user", new_user, module="帳號管理")
@@ -198,6 +200,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
         with sqlite3.connect(db_name,timeout=5) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             cursor = conn.cursor()
 
             cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
@@ -279,7 +282,7 @@ def build_user_management_tab(tab, db_name, current_user):
                 ))
 
             conn.commit()
-
+            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
         messagebox.showinfo("成功", "已更新")
         log_activity(db_name, current_user, "update_user", original_username)
         entry_edit_user.delete(0, tk.END)
@@ -301,6 +304,7 @@ def build_user_management_tab(tab, db_name, current_user):
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM users WHERE username=?", (username,))
                 conn.commit()
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             messagebox.showinfo("成功", "使用者已刪除")
             log_activity(db_name, current_user, "delete_user", username)
             refresh_users()
