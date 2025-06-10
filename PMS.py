@@ -8,7 +8,7 @@ import socket
 import re
 import shutil
 import atexit
-
+import time
 
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
@@ -17,9 +17,11 @@ from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
+
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
 with open(lock_path, "w") as f:
-    f.write("running")
+    f.write(str(time.time()))
+
 
 @atexit.register
 def remove_lock():
