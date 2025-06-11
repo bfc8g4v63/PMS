@@ -229,8 +229,9 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"無法判定專長「{specialty_key}」的儲存路徑"))
             return
 
-        if not os.path.exists(save_dir):
-            os.makedirs(save_dir)
+        os.makedirs(save_dir, exist_ok=True)
+        #if not os.path.exists(save_dir):
+        #    os.makedirs(save_dir)
 
         timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
         final_filename = f"{output_name}_{timestamp}.pdf"
@@ -384,13 +385,13 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
         terms_and = [t.strip() for t in keyword.split('&')] if '&' in keyword else []
         terms_or = [t.strip() for t in keyword.split('/')] if '/' in keyword else []
         
-        with sqlite3.connect(db_name, timeout=5) as conn:
+        with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            
             cursor = conn.cursor()
             cursor.execute("SELECT product_code, product_name FROM issues")
             all_data = cursor.fetchall()
-            #conn.close()
+            
 
         for code, name in all_data:
             combined = f"{code}_{name}".lower()

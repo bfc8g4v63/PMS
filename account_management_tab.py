@@ -46,9 +46,9 @@ def build_user_management_tab(tab, db_name, current_user):
     def refresh_users():
         for row in tree.get_children():
             tree.delete(row)
-        with sqlite3.connect(db_name, timeout=5) as conn:
+        with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            
             cursor = conn.cursor()
             sql = """SELECT username, role, can_add, can_delete, active,
                 can_upload_sop, can_view_logs, can_delete_logs,
@@ -137,7 +137,7 @@ def build_user_management_tab(tab, db_name, current_user):
             return
         hashed_pw = hash_password(new_pw)
 
-        with sqlite3.connect(db_name,timeout=5) as conn:
+        with sqlite3.connect(db_name,timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users WHERE username=?", (new_user,))
@@ -198,9 +198,9 @@ def build_user_management_tab(tab, db_name, current_user):
         entry_edit_user.insert(0, username)
         role_edit.set(item[1])
 
-        with sqlite3.connect(db_name,timeout=5) as conn:
+        with sqlite3.connect(db_name,timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            
             cursor = conn.cursor()
 
             cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
@@ -225,7 +225,7 @@ def build_user_management_tab(tab, db_name, current_user):
             return
 
         original_username = tree.item(selected[0])["values"][0]
-        if original_username == current_user:
+        if original_username == current_user.get("user"):
             messagebox.showerror("錯誤", "無法修改當前登入帳號")
             return
 
@@ -236,7 +236,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
         permissions = {k: v.get() for k, v in permission_vars.items()}
 
-        with sqlite3.connect(db_name, timeout=5) as conn:
+        with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             cursor = conn.cursor()
 
@@ -299,7 +299,7 @@ def build_user_management_tab(tab, db_name, current_user):
             messagebox.showerror("錯誤", "無法刪除自己")
             return
         if messagebox.askyesno("確認", f"是否確定要刪除帳號「{username}」？"):
-            with sqlite3.connect(db_name,timeout=5) as conn:
+            with sqlite3.connect(db_name,timeout=10) as conn:
                 conn.execute("PRAGMA journal_mode=WAL;")
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM users WHERE username=?", (username,))

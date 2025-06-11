@@ -23,7 +23,8 @@ def get_required_columns():
     }
 
 def auto_add_missing_columns(db_path, schema_map):
-    with sqlite3.connect(db_path) as conn:
+    with sqlite3.connect(db_path, timeout=10) as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         for table, columns in schema_map.items():
             cursor.execute(f"PRAGMA table_info({table})")

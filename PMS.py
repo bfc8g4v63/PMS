@@ -100,7 +100,7 @@ def is_another_instance_running():
 def init_db():
     if os.path.exists(DB_NAME) and not os.access(DB_NAME, os.R_OK | os.W_OK):
         raise IOError(f"無法讀寫資料庫檔案：{DB_NAME}")
-    with sqlite3.connect(DB_NAME, timeout=5) as conn:
+    with sqlite3.connect(DB_NAME, timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL")
 
 def sync_back_to_server():
@@ -125,6 +125,14 @@ def logout_and_exit(root):
             _instance_lock.close()
         except:
             pass
+
+        try:
+            with sqlite3.connect(DB_NAME, timeout=10) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+        except Exception as e:
+            print(f"[登出清理WAL失敗] {e}")
+
         sync_back_to_server()
         root.destroy()
         sys.exit()
@@ -194,9 +202,9 @@ def build_log_view_tab(tab, db_name, role):
         restricted_roles = ("engineer", "leader")
         restricted_keywords = ("add_user", "update_user", "delete_user")
 
-        with sqlite3.connect(db_name, timeout=5) as conn:
+        with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            
             cursor = conn.cursor()
             base_sql = "SELECT id, username, action, filename, timestamp FROM activity_logs"
             params = []
@@ -252,7 +260,7 @@ def build_log_view_tab(tab, db_name, role):
                 messagebox.showwarning("提醒", "請先選取一筆操作紀錄")
                 return
             if messagebox.askyesno("確認", "確定要刪除所選操作紀錄？"):
-                with sqlite3.connect(db_name, timeout=5) as conn:
+                with sqlite3.connect(db_name, timeout=10) as conn:
                     conn.execute("PRAGMA journal_mode=WAL;")
                     cursor = conn.cursor()
                     for iid in selected:
@@ -263,7 +271,7 @@ def build_log_view_tab(tab, db_name, role):
 
         def delete_all_logs():
             if messagebox.askyesno("確認", "確定要刪除所有操作紀錄？此操作無法復原。"):
-                with sqlite3.connect(db_name, timeout=5) as conn:
+                with sqlite3.connect(db_name, timeout=10) as conn:
                     conn.execute("PRAGMA journal_mode=WAL;")
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM activity_logs")
@@ -277,8 +285,9 @@ def build_log_view_tab(tab, db_name, role):
     refresh_logs()
 
 def initialize_database():
-    with sqlite3.connect(DB_NAME) as conn:
+    with sqlite3.connect(DB_NAME,timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
+
         cursor = conn.cursor()
 
         cursor.execute("""
@@ -362,7 +371,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     if not path:
         return None
 
-    with sqlite3.connect(DB_NAME, timeout=5) as conn:
+    with sqlite3.connect(DB_NAME, timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         cursor.execute("SELECT product_name FROM issues WHERE product_code=?", (product_code,))
@@ -378,7 +387,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     if not display_name:
         return None
 
-    with sqlite3.connect(DB_NAME, timeout=5) as conn:
+    with sqlite3.connect(DB_NAME, timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         update_sop_field(cursor, product_code, field_name, display_name)
@@ -466,7 +475,7 @@ def build_password_change_tab(tab, db_name, current_user):
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
-        with sqlite3.connect(db_name, timeout=5) as conn:
+        with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
@@ -559,8 +568,9 @@ def create_main_interface(root, db_name, login_info):
                 messagebox.showerror("錯誤", "必須為 8/12 碼數字")
                 return
 
-            with sqlite3.connect(db_name, timeout=5) as conn:
+            with sqlite3.connect(db_name, timeout=10) as conn:
                 conn.execute("PRAGMA journal_mode=WAL;")
+                
                 cursor = conn.cursor()
                 cursor.execute("SELECT product_code FROM issues WHERE product_code=?", (code,))
                 if cursor.fetchone():
@@ -661,7 +671,7 @@ def create_main_interface(root, db_name, login_info):
                 return
             if messagebox.askyesno("確認", "確定要刪除選取的資料？此操作無法復原。"):
                 deleted_items = [] 
-                with sqlite3.connect(db_name, timeout=5) as conn:
+                with sqlite3.connect(db_name, timeout=10) as conn:
                     conn.execute("PRAGMA journal_mode=WAL;")
                     cursor = conn.cursor()
                     for item in selected_items:
@@ -687,9 +697,9 @@ def create_main_interface(root, db_name, login_info):
         for row in tree.get_children():
             tree.delete(row)
 
-        with sqlite3.connect(db_name, timeout=5) as conn:
+        with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+            #conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             cursor = conn.cursor()
 
             base_query = """
@@ -780,7 +790,7 @@ def create_main_interface(root, db_name, login_info):
                 return
             
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
-            with sqlite3.connect(DB_NAME,timeout=5) as conn:
+            with sqlite3.connect(DB_NAME,timeout=10) as conn:
                 conn.execute("PRAGMA journal_mode=WAL;")
                 cursor = conn.cursor()
                 cursor.execute(f"SELECT {target_field} FROM issues WHERE product_code=?", (product_code,))
@@ -809,7 +819,7 @@ def create_main_interface(root, db_name, login_info):
     tree.bind("<Control-c>", on_copy)
     
     def toggle_bypass(product_code, field_name, bypass_field):
-        with sqlite3.connect(DB_NAME, timeout=5) as conn:
+        with sqlite3.connect(DB_NAME, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             cursor = conn.cursor()
 
@@ -829,7 +839,6 @@ def create_main_interface(root, db_name, login_info):
         query_data()
 
 def login():
-
     result = {
         "user": None,
         "role": None,
@@ -852,35 +861,37 @@ def login():
 
         hashed_pw = hash_password(p)
 
-        with sqlite3.connect(DB_NAME) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-            c = conn.cursor()
-            c.execute("""
-                SELECT role, can_add, can_delete, specialty,
-                       can_view_logs, can_delete_logs, can_upload_sop,
-                       can_view_issues, can_manage_users
-                FROM users
-                WHERE username=? AND password=? AND active=1
-            """, (u, hashed_pw))
-            r = c.fetchone()
-            if r:
-                result.update({
-                    "user": u,
-                    "role": r[0],
-                    "can_add": r[1],
-                    "can_delete": r[2],
-                    "specialty": r[3],
-                    "can_view_logs": r[4],
-                    "can_delete_logs": r[5],
-                    "can_upload_sop": r[6],
-                    "can_view_issues": r[7],
-                    "can_manage_users": r[8]
-                })
-                print("目前使用的 DB 檔案路徑：", DB_NAME)
-                login_window.destroy()
-            else:
-                messagebox.showerror("錯誤", "帳號或密碼錯誤或帳號已停用")
+        try:
+            with sqlite3.connect(DB_NAME, timeout=10) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                c = conn.cursor()
+                c.execute("""
+                    SELECT role, can_add, can_delete, specialty,
+                           can_view_logs, can_delete_logs, can_upload_sop,
+                           can_view_issues, can_manage_users
+                    FROM users
+                    WHERE username=? AND password=? AND active=1
+                """, (u, hashed_pw))
+                r = c.fetchone()
+                if r:
+                    result.update({
+                        "user": u,
+                        "role": r[0],
+                        "can_add": r[1],
+                        "can_delete": r[2],
+                        "specialty": r[3],
+                        "can_view_logs": r[4],
+                        "can_delete_logs": r[5],
+                        "can_upload_sop": r[6],
+                        "can_view_issues": r[7],
+                        "can_manage_users": r[8]
+                    })
+                    print("目前使用的 DB 檔案路徑：", DB_NAME)
+                    login_window.destroy()
+                else:
+                    messagebox.showerror("錯誤", "帳號或密碼錯誤或帳號已停用")
+        except sqlite3.OperationalError as e:
+            messagebox.showerror("資料庫錯誤", f"無法連線資料庫，請稍後再試。\n\n錯誤訊息：{e}")
 
     login_window = tk.Tk()
     login_window.title("登入系統")
@@ -889,12 +900,15 @@ def login():
         login_window.iconbitmap("PMS.ico")
     except:
         pass
+
     tk.Label(login_window, text="使用者名稱：").pack(pady=(15, 5))
     entry_user = tk.Entry(login_window)
     entry_user.pack()
+
     tk.Label(login_window, text="密碼：").pack(pady=(10, 5))
     entry_pass = tk.Entry(login_window, show="*")
     entry_pass.pack()
+
     tk.Button(login_window, text="登入", command=try_login).pack(pady=15)
 
     def on_close():
@@ -940,7 +954,7 @@ def open_password_change_window(parent, db_name, username):
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
-        with sqlite3.connect(db_name,timeout=5) as conn:
+        with sqlite3.connect(db_name,timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (username, old_hash))
