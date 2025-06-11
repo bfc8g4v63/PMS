@@ -29,3 +29,8 @@ def check_wal_size(threshold_mb=100):
             print(f"WAL 檔案過大 ({size_mb:.1f} MB)，可考慮執行 checkpoint")
 可以綁定定時檢查或管理員提示。
 
+檢查
+1. timeout
+2. conn.execute("PRAGMA journal_mode=WAL;")
+3. conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+4. 其他BUG
