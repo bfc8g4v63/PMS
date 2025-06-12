@@ -1,4 +1,4 @@
-1.  新增統一資料庫連線函式（可選）
+1.  新增統一資料庫連線函式
 讓未來維護更簡潔，例如：
 
 python
@@ -28,6 +28,11 @@ def check_wal_size(threshold_mb=100):
         if size_mb > threshold_mb:
             print(f"WAL 檔案過大 ({size_mb:.1f} MB)，可考慮執行 checkpoint")
 可以綁定定時檢查或管理員提示。
+
+3.
+4. 其他可優化建議
+項目	評價 / 建議
+current_user == username 比較 current_user 應為 dict，請改成 current_user.get("user")
 
 檢查
 1. timeout
