@@ -5,7 +5,7 @@
 - 角色權限控管 (Role-based Access Control)
 - 密碼變更 (Password Change)
   - 視窗初始化修正（Tkinter Toplevel）
-  - 提升 UNC 環境兼容性 (Increase UNC compatibility )
+  - 提升 UNC 環境兼容性 (Increase UNC compatibility)
 
 ## 資料庫設計 (Database Design)
 - 料號、品名、DIP、組、測、包SOP、OQC (Issues schema)
