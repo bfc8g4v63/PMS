@@ -923,8 +923,11 @@ def open_password_change_window(parent, db_name, username):
     win = tk.Toplevel(parent)
     win.title("變更密碼")
     win.geometry("300x220")
-    win.iconbitmap("PMS.ico")
     win.resizable(False, False)
+    try:
+        win.iconbitmap("PMS.ico")
+    except:
+        pass
 
     tk.Label(win, text="舊密碼：").pack(pady=(10, 0))
     entry_old = tk.Entry(win, show="*")
