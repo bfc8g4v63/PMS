@@ -17,11 +17,17 @@ from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
+#True=local、False=Main SERVER
+USE_LOCAL_DB = True
+LOCAL_DB_PATH = r"C:\Nelson\Dev\GitHub\PMS\PMS.db"
+BASE_SHARE    = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
+ORIGINAL_DB   = os.path.join(BASE_SHARE, "PMS.db")
+DB_NAME       = LOCAL_DB_PATH if USE_LOCAL_DB else ORIGINAL_DB
+print(f"📦 使用資料庫：{DB_NAME}")
 
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
 with open(lock_path, "w") as f:
     f.write(str(time.time()))
-
 
 @atexit.register
 def remove_lock():
@@ -37,10 +43,6 @@ SOP_FIELDS = {
     "packaging": ("包裝SOP", "packaging_sop", "packaging_sop_bypass", r"包裝SOP"),
     "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC")
 }
-
-BASE_SHARE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
-ORIGINAL_DB = os.path.join(BASE_SHARE, "PMS.db")
-DB_NAME     = ORIGINAL_DB
 
 DIP_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\DIP_SOP"
 ASSEMBLY_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\組裝SOP"
