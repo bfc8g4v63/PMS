@@ -18,11 +18,21 @@ from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 
 #True=local、False=Main SERVER
-USE_LOCAL_DB = True
+USE_LOCAL_DB = False
 LOCAL_DB_PATH = r"C:\Nelson\Dev\GitHub\PMS\PMS.db"
 BASE_SHARE    = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
-ORIGINAL_DB   = os.path.join(BASE_SHARE, "PMS.db")
-DB_NAME       = LOCAL_DB_PATH if USE_LOCAL_DB else ORIGINAL_DB
+UNC_DB        = os.path.join(BASE_SHARE, "PMS.db")
+Z_DRIVE_DB    = r"Z:\PMS.db"
+
+if USE_LOCAL_DB:
+    DB_NAME = LOCAL_DB_PATH
+elif os.path.exists(Z_DRIVE_DB):
+    DB_NAME = Z_DRIVE_DB
+else:
+    DB_NAME = UNC_DB  # fallback
+
+ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
+
 print(f"📦 使用資料庫：{DB_NAME}")
 
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
@@ -102,17 +112,34 @@ def is_another_instance_running():
         return True
 
 def init_db():
-    if os.path.exists(DB_NAME) and not os.access(DB_NAME, os.R_OK | os.W_OK):
+    if not os.path.exists(DB_NAME):
+        messagebox.showerror("錯誤", f"找不到資料庫檔案：\n{DB_NAME}\n\n請確認您是從 PMS Launcher.bat 啟動，或 Z: 磁碟有正確掛載。")
+        sys.exit()
+
+    if not os.access(DB_NAME, os.R_OK | os.W_OK):
         raise IOError(f"無法讀寫資料庫檔案：{DB_NAME}")
-    with sqlite3.connect(DB_NAME, timeout=10) as conn:
-        conn.execute("PRAGMA journal_mode=WAL")
+
+    try:
+        with sqlite3.connect(DB_NAME, timeout=10) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+    except sqlite3.OperationalError as e:
+        messagebox.showerror("資料庫錯誤", f"無法開啟資料庫：\n{DB_NAME}\n\n錯誤訊息：{e}")
+        sys.exit()
 
 def sync_back_to_server():
-    if DB_NAME == ORIGINAL_DB:
+    UNC_DB = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
+    Z_DRIVE_DB = r"Z:\PMS.db"
+
+    if os.path.exists(Z_DRIVE_DB):
+        original = Z_DRIVE_DB
+    else:
+        original = UNC_DB
+
+    if DB_NAME == original:
         print("無需回寫資料庫，因為 DB 實體與操作一致")
         return
     try:
-        shutil.copy(DB_NAME, ORIGINAL_DB)
+        shutil.copy(DB_NAME, original)
         print("已同步本機資料庫回網路磁碟")
     except Exception as e:
         print(f"資料回寫失敗: {e}")
