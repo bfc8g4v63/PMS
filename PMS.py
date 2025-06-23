@@ -54,20 +54,21 @@ LOG_TABLE = "activity_logs"
 
 _instance_lock = None
 
-def is_valid_pdf(file_path):
-    try:
-        with open(file_path, 'rb') as f:
-            header = f.read(5)
-            return header == b'%PDF-'
-    except:
-        return False
+def is_valid_file(file_path, field_name):
+    allowed_extensions = [".pdf"]
+    if field_name == "oqc_checklist":
+        allowed_extensions.append(".xlsx")
+    
+    ext = os.path.splitext(file_path)[1].lower()
+    return ext in allowed_extensions
 
-def save_file_if_exist(file_path, target_folder, username, product_code, product_name):
+def save_file_if_exist(file_path, target_folder, username, product_code, product_name, field_name):
+
     if not file_path:
         return "", ""
 
-    if not is_valid_pdf(file_path):
-        messagebox.showerror("錯誤", f"這個檔案不是合法的 PDF 檔案：{file_path}")
+    if not is_valid_file(file_path, field_name):
+        messagebox.showerror("錯誤", f"這個檔案格式不合法：{file_path}\n只允許副檔名：.pdf{('、.xlsx' if field_name == 'oqc_checklist' else '')}")
         return "", ""
 
     if not product_name:
@@ -80,7 +81,8 @@ def save_file_if_exist(file_path, target_folder, username, product_code, product
         messagebox.showerror("錯誤", f"品名不合法，無法正確生成檔名")
         return "", ""
 
-    filename = f"{product_code}_{safe_name}_{timestamp}.pdf"
+    ext = os.path.splitext(file_path)[1].lower()
+    filename = f"{product_code}_{safe_name}_{timestamp}{ext}"
     target_path = os.path.join(target_folder, filename)
 
     try:
@@ -579,11 +581,11 @@ def create_main_interface(root, db_name, login_info):
                     messagebox.showerror("錯誤", "料號已存在，請重新確認過。")
                     return
 
-                d_file, d_time = save_file_if_exist(entry_dip.get().strip(), DIP_SOP_PATH, current_user, code, name)
-                a_file, a_time = save_file_if_exist(entry_assembly.get().strip(), ASSEMBLY_SOP_PATH, current_user, code, name)
-                t_file, t_time = save_file_if_exist(entry_test.get().strip(), TEST_SOP_PATH, current_user, code, name)
-                p_file, p_time = save_file_if_exist(entry_packaging.get().strip(), PACKAGING_SOP_PATH, current_user, code, name)
-                o_file, o_time = save_file_if_exist(entry_oqc.get().strip(), OQC_PATH, current_user, code, name)
+                d_file, d_time = save_file_if_exist(entry_dip.get().strip(), DIP_SOP_PATH, current_user, code, name, "dip_sop")
+                a_file, a_time = save_file_if_exist(entry_assembly.get().strip(), ASSEMBLY_SOP_PATH, current_user, code, name, "assembly_sop")
+                t_file, t_time = save_file_if_exist(entry_test.get().strip(), TEST_SOP_PATH, current_user, code, name, "test_sop")
+                p_file, p_time = save_file_if_exist(entry_packaging.get().strip(), PACKAGING_SOP_PATH, current_user, code, name, "packaging_sop")
+                o_file, o_time = save_file_if_exist(entry_oqc.get().strip(), OQC_PATH, current_user, code, name, "oqc_checklist")
 
                 if d_file:
                     log_activity(db_name, current_user, "新增SOP", d_file, module="生產資訊")
