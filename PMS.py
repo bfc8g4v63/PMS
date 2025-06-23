@@ -381,7 +381,8 @@ def save_file(file_path, target_folder, username, product_code=None, product_nam
 
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
     safe_name = product_name.replace("/", "-").replace("\\", "-")
-    filename = f"{product_code}_{safe_name}_{timestamp}.pdf"
+    ext = os.path.splitext(file_path)[1].lower()
+    filename = f"{product_code}_{safe_name}_{timestamp}{ext}"
     target_path = os.path.join(target_folder, filename)
 
     try:
@@ -431,7 +432,6 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     log_activity(DB_NAME, current_user, "更新SOP", display_name, module="生產資訊")
 
     return display_name
-
 
 def create_sop_update_button(frame, row, label, sop_path, field_name, product_code_entry, product_name_entry, entry_widget, current_user, user_specialty, role, allowed_specialty):
     def update_action():

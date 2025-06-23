@@ -1,6 +1,6 @@
 from datetime import datetime
 
-__version__ = "v1.0.4"
+__version__ = "v1.0.5"
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 with open("version.txt", "w", encoding="utf-8") as f:
