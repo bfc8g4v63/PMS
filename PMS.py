@@ -9,6 +9,7 @@ import re
 import shutil
 import atexit
 import time
+import math
 
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
@@ -16,24 +17,20 @@ from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
+from changelog_tab import build_changelog_tab
+from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
 
-#True=local、False=Main SERVER
-USE_LOCAL_DB = False
-LOCAL_DB_PATH = r"C:\Nelson\Dev\GitHub\PMS\PMS.db"
-BASE_SHARE    = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
-UNC_DB        = os.path.join(BASE_SHARE, "PMS.db")
-Z_DRIVE_DB    = r"Z:\PMS.db"
 
 if USE_LOCAL_DB:
     DB_NAME = LOCAL_DB_PATH
 elif os.path.exists(Z_DRIVE_DB):
     DB_NAME = Z_DRIVE_DB
 else:
-    DB_NAME = UNC_DB  # fallback
+    DB_NAME = UNC_DB
 
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 
-print(f"📦 使用資料庫：{DB_NAME}")
+print(f"使用資料庫：{DB_NAME}")
 
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
 with open(lock_path, "w") as f:
@@ -127,6 +124,10 @@ def init_db():
         sys.exit()
 
 def sync_back_to_server():
+    if USE_LOCAL_DB:
+        print("[偵測到本地開發模式] 跳過資料庫回寫")
+        return
+
     UNC_DB = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
     Z_DRIVE_DB = r"Z:\PMS.db"
 
@@ -164,7 +165,9 @@ def logout_and_exit(root):
         except Exception as e:
             print(f"[登出清理WAL失敗] {e}")
 
-        sync_back_to_server()
+        if not USE_LOCAL_DB:
+            sync_back_to_server()
+
         root.destroy()
         sys.exit()
 
@@ -540,11 +543,12 @@ def create_main_interface(root, db_name, login_info):
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "異常平台": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
-        "其他工具": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
-        "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
-
+        "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None,
+        "改版歷程": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
     }
+    if current_role in ("admin", "engineer", "leader"):
+        build_changelog_tab(tabs["改版歷程"], current_role, DB_NAME)
 
     for name, frame in tabs.items():
         if frame:
@@ -730,7 +734,7 @@ def create_main_interface(root, db_name, login_info):
 
         with sqlite3.connect(db_name, timeout=10) as conn:
             conn.execute("PRAGMA journal_mode=WAL;")
-            #conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
             cursor = conn.cursor()
 
             base_query = """

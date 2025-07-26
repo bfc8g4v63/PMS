@@ -4,8 +4,11 @@ import hashlib
 import re
 from tkinter import ttk, messagebox
 from utils import log_activity
+from schema_helper import auto_add_missing_columns, get_required_columns
 
 def build_user_management_tab(tab, db_name, current_user):
+
+    auto_add_missing_columns(db_name, get_required_columns())
     PERMISSION_FLAGS = {
         "can_add": {"label": "新增", "default": 1},
         "can_delete": {"label": "刪除", "default": 0},
@@ -116,11 +119,11 @@ def build_user_management_tab(tab, db_name, current_user):
     def hash_password(password):
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
+
     def add_user():
         new_user = entry_user.get().strip()
         new_pw = entry_pass.get().strip()
         role = role_var.get()
-
         permissions = collect_permission_values()
         can_add = permissions["can_add"]
         can_delete = permissions["can_delete"]
@@ -135,6 +138,7 @@ def build_user_management_tab(tab, db_name, current_user):
         if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pw):
             messagebox.showerror("錯誤", "密碼須為6～12碼英文或數字組成")
             return
+
         hashed_pw = hash_password(new_pw)
 
         with sqlite3.connect(db_name,timeout=10) as conn:
@@ -150,7 +154,6 @@ def build_user_management_tab(tab, db_name, current_user):
             sql = f"INSERT INTO users ({', '.join(fields)}) VALUES ({placeholders})"
             values = [new_user, hashed_pw, role, specialty_var.get()] + [permission_vars[k].get() for k in permission_vars]
             cursor.execute(sql, values)
-
             conn.commit()
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
@@ -159,9 +162,11 @@ def build_user_management_tab(tab, db_name, current_user):
 
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)
-        specialty_var.set("")
-        for v in permission_vars.values():
-            v.set(0)
+        for k, v in permission_vars.items():
+            if k in ("can_add", "can_upload_sop", "can_view_logs", "can_view_issues"):
+                v.set(1)
+            else:
+                v.set(0)
         refresh_users()
 
     tk.Button(form, text="新增使用者", command=add_user, bg="lightblue").grid(row=5, column=1, pady=10)

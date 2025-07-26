@@ -230,8 +230,6 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             return
 
         os.makedirs(save_dir, exist_ok=True)
-        #if not os.path.exists(save_dir):
-        #    os.makedirs(save_dir)
 
         timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
         final_filename = f"{output_name}_{timestamp}.pdf"

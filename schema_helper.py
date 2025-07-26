@@ -19,6 +19,11 @@ def get_required_columns():
             "test_sop": "TEXT",
             "packaging_sop": "TEXT",
             "oqc_checklist": "TEXT"
+        },
+        "changelog": {
+            "version": "TEXT NOT NULL",
+            "date": "TEXT NOT NULL",
+            "content": "TEXT NOT NULL"
         }
     }
 
@@ -27,6 +32,11 @@ def auto_add_missing_columns(db_path, schema_map):
         conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         for table, columns in schema_map.items():
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
+            if not cursor.fetchone():
+                print(f"[警告] 資料表不存在：{table}，無法補欄位")
+                continue
+
             cursor.execute(f"PRAGMA table_info({table})")
             existing = [row[1] for row in cursor.fetchall()]
             print(f"資料表 {table} 現有欄位: {existing}")
@@ -38,3 +48,16 @@ def auto_add_missing_columns(db_path, schema_map):
                         print(f"已新增欄位 {col_name} 到資料表 {table}")
                     except sqlite3.OperationalError as e:
                         print(f"欄位新增失敗 {col_name}@{table}: {e}")
+
+def ensure_changelog_schema(db_name):
+    with sqlite3.connect(db_name) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS changelog (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version TEXT NOT NULL,
+                date TEXT NOT NULL,
+                content TEXT NOT NULL
+            )
+        """)
+        conn.commit()
