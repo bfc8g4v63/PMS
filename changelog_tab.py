@@ -1,106 +1,198 @@
-import sys
-import os
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 import tkinter as tk
+from tkinter import ttk, messagebox
 import sqlite3
-from tkinter import ttk, messagebox, simpledialog
 from datetime import datetime
-from schema_helper import ensure_changelog_schema
+import re
+
+from schema_helper import get_next_changelog_version
 
 def build_changelog_tab(tab, current_role, db_name):
-    ensure_changelog_schema(db_name)
+    frame = ttk.Frame(tab)
+    frame.pack(fill="both", expand=True)
 
-    tree = ttk.Treeview(tab, columns=("version", "date", "content"), show="headings", height=20)
-    tree.heading("version", text="版本", anchor="w")
-    tree.heading("date", text="時間", anchor="center")
-    tree.heading("content", text="內容", anchor="w")
+    tree = ttk.Treeview(frame, columns=("version", "date", "content"), show="headings")
+    tree.heading("version", text="版本")
+    tree.heading("date", text="時間")
+    tree.heading("content", text="內容")
     tree.column("version", width=100)
-    tree.column("date", width=160)
-    tree.column("content", width=600)
-    tree.pack(fill="both", expand=True)
+    tree.column("date", width=150)
+    tree.column("content", width=500)
+    tree.pack(fill="both", expand=True, padx=10, pady=10)
 
-    def load_changelog():
-        tree.delete(*tree.get_children())
-        with sqlite3.connect(db_name) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT id, version, date, content FROM changelog ORDER BY date DESC")
-            for row in cursor.fetchall():
-                tree.insert("", "end", iid=row[0], values=row[1:])
-        tree.yview_moveto(0)
+    entry_frame = ttk.Frame(frame)
+    entry_frame.pack(fill="x", padx=10, pady=5)
 
-    def add_changelog():
-        version = version_entry.get().strip()
-        content = content_entry.get().strip()
-        if not version or not content:
-            messagebox.showwarning("欄位未填", "請輸入版本與內容")
-            return
-        date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with sqlite3.connect(db_name, timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            conn.execute("INSERT INTO changelog (version, date, content) VALUES (?, ?, ?)",
-                         (version, date, content))
-            conn.commit()
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-        version_entry.delete(0, tk.END)
-        content_entry.delete(0, tk.END)
-        load_changelog()
+    version_entry = ttk.Entry(entry_frame)
+    content_entry = ttk.Entry(entry_frame, width=60)
+    if current_role == "admin":
+        ttk.Label(entry_frame, text="版本:").grid(row=0, column=0, sticky="e")
+        version_entry.grid(row=0, column=1, sticky="w", padx=(5, 10))
+        ttk.Label(entry_frame, text="內容:").grid(row=0, column=2, sticky="e")
+        content_entry.grid(row=0, column=3, sticky="w", padx=(5, 10))
 
-    def on_double_click(event):
-        if current_role != "admin":
-            return
-        item_id = tree.focus()
-        if not item_id:
-            return
-        version, date, content = tree.item(item_id, "values")
-        new_version = simpledialog.askstring("修改版本", "請輸入新版本：", initialvalue=version)
-        if new_version is None:
-            return
-        new_content = simpledialog.askstring("修改內容", "請輸入新內容：", initialvalue=content)
-        if new_content is None:
-            return
-        with sqlite3.connect(db_name) as conn:
-            conn.execute("UPDATE changelog SET version=?, content=? WHERE id=?",
-                         (new_version, new_content, item_id))
-            conn.commit()
-        load_changelog()
+    status_var = tk.StringVar()
+    status_label = ttk.Label(entry_frame, textvariable=status_var, foreground="blue")
+    if current_role == "admin":
+        status_label.grid(row=1, column=0, columnspan=4, sticky="w", pady=(5, 0))
 
-    def on_right_click(event):
-        if current_role != "admin":
-            return
-        iid = tree.identify_row(event.y)
-        if iid:
-            tree.selection_set(iid)
-            menu = tk.Menu(tab, tearoff=0)
-            menu.add_command(label="刪除紀錄", command=lambda: delete_changelog(iid))
-            menu.add_command(label="編輯紀錄", command=lambda: on_double_click(None))
-            menu.post(event.x_root, event.y_root)
+    original_content = ""
 
-    def delete_changelog(item_id):
-        confirm = messagebox.askyesno("刪除確認", "確定要刪除此筆改版紀錄？")
-        if not confirm:
-            return
-        with sqlite3.connect(db_name) as conn:
-            conn.execute("DELETE FROM changelog WHERE id=?", (item_id,))
-            conn.commit()
-        load_changelog()
-
-    tree.bind("<Double-1>", on_double_click)
-    tree.bind("<Button-3>", on_right_click)
+    def expected_next_version():
+        return get_next_changelog_version(db_name)
 
     if current_role == "admin":
-        entry_frame = tk.Frame(tab)
-        entry_frame.pack(fill="x", pady=5)
+        def validate_version(*args):
+            version = version_entry.get().strip()
+            pattern = r"^v\d+\.\d+\.\d+$"
+            if not re.match(pattern, version):
+                add_button.config(state=tk.DISABLED)
+                return
+            major, minor, patch = map(int, version.lstrip("v").split("."))
+            if (major, minor, patch) < (1, 0, 0):
+                add_button.config(state=tk.DISABLED)
+                return
+            with sqlite3.connect(db_name) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM changelog WHERE version = ?", (version,))
+                exists = cursor.fetchone()[0] > 0
+                if exists:
+                    add_button.config(state=tk.DISABLED)
+                    return
+            expected = expected_next_version()
+            if version != expected:
+                add_button.config(state=tk.DISABLED)
+                return
+            add_button.config(state=tk.NORMAL)
 
-        tk.Label(entry_frame, text="版本：").grid(row=0, column=0)
-        version_entry = tk.Entry(entry_frame)
-        version_entry.grid(row=0, column=1)
+        def on_content_change(*args):
+            current = content_entry.get().strip()
+            if current == original_content or not version_entry.get().strip():
+                update_button.config(state=tk.DISABLED)
+            else:
+                update_button.config(state=tk.NORMAL)
 
-        tk.Label(entry_frame, text="內容：").grid(row=1, column=0)
-        content_entry = tk.Entry(entry_frame, width=80)
-        content_entry.grid(row=1, column=1, columnspan=3)
+        version_entry.bind("<KeyRelease>", validate_version)
+        content_entry.bind("<KeyRelease>", on_content_change)
 
-        tk.Button(entry_frame, text="新增紀錄", command=add_changelog).grid(row=0, column=3, rowspan=2, padx=10)
+        def insert_changelog():
+            version = version_entry.get().strip()
+            content = content_entry.get().strip()
+            if not version or not content:
+                messagebox.showwarning("欄位缺漏", "請輸入版本與內容")
+                return
+            pattern = r"^v\d+\.\d+\.\d+$"
+            if not re.match(pattern, version):
+                messagebox.showerror("版本格式錯誤", "版本格式必須為 vX.Y.Z")
+                return
+            major, minor, patch = map(int, version.lstrip("v").split("."))
+            if (major, minor, patch) < (1, 0, 0):
+                messagebox.showerror("版本過低", "版本不得低於 v1.0.0")
+                return
+            expected = expected_next_version()
+            if version != expected:
+                messagebox.showerror("版本跳號", f"不可以跳版。下一個合法版本應該是 {expected}")
+                return
+            with sqlite3.connect(db_name, timeout=10) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                cursor = conn.cursor()
+                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                try:
+                    cursor.execute(
+                        "INSERT INTO changelog (version, date, content) VALUES (?, ?, ?)",
+                        (version, now, content),
+                    )
+                    conn.commit()
+                except sqlite3.IntegrityError:
+                    messagebox.showerror("版本重複", f"版本 {version} 已存在，請重新輸入")
+                    return
+            refresh_changelog()
+            version_entry.delete(0, tk.END)
+            content_entry.delete(0, tk.END)
+            add_button.config(state=tk.DISABLED)
+            status_var.set("")
 
-    load_changelog()
+        def update_changelog():
+            nonlocal original_content
+            version = version_entry.get().strip()
+            content = content_entry.get().strip()
+            if not version or not content:
+                messagebox.showwarning("欄位缺漏", "請輸入版本與內容")
+                return
+            with sqlite3.connect(db_name, timeout=10) as conn:
+                conn.execute("PRAGMA journal_mode=WAL;")
+                cursor = conn.cursor()
+                cursor.execute(
+                    "UPDATE changelog SET content = ? WHERE version = ?",
+                    (content, version),
+                )
+                conn.commit()
+            refresh_changelog()
+            messagebox.showinfo("更新成功", f"版本 {version} 的內容已更新")
+            version_entry.delete(0, tk.END)
+            content_entry.delete(0, tk.END)
+            update_button.config(state=tk.DISABLED)
+            status_var.set("")
+            original_content = ""
+
+        def delete_selected():
+            selected = tree.selection()
+            if not selected:
+                return
+            item = tree.item(selected)
+            version = item["values"][0]
+            confirm = messagebox.askyesno("確認刪除", f"是否刪除版本 {version}？")
+            if confirm:
+                with sqlite3.connect(db_name, timeout=10) as conn:
+                    conn.execute("PRAGMA journal_mode=WAL;")
+                    cursor = conn.cursor()
+                    cursor.execute("DELETE FROM changelog WHERE version = ?", (version,))
+                    conn.commit()
+                refresh_changelog()
+
+        def fill_next_version():
+            next_version = expected_next_version()
+            version_entry.delete(0, tk.END)
+            version_entry.insert(0, next_version)
+            validate_version()
+
+        auto_button = ttk.Button(entry_frame, text="自動產生版本", command=fill_next_version)
+        auto_button.grid(row=0, column=4, padx=(10, 0), sticky="w")
+
+        add_button = ttk.Button(entry_frame, text="新增紀錄", command=insert_changelog, state=tk.DISABLED)
+        add_button.grid(row=0, column=5, padx=(10, 0), sticky="w")
+
+        update_button = ttk.Button(entry_frame, text="儲存修改", command=update_changelog, state=tk.DISABLED)
+        update_button.grid(row=0, column=6, padx=(10, 0), sticky="w")
+
+        delete_button = ttk.Button(entry_frame, text="刪除所選", command=delete_selected)
+        delete_button.grid(row=0, column=7, padx=(10, 0), sticky="w")
+
+    def refresh_changelog():
+        tree.delete(*tree.get_children())
+        with sqlite3.connect(db_name, timeout=10) as conn:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            cursor = conn.cursor()
+            cursor.execute("SELECT version, date, content FROM changelog ORDER BY rowid DESC")
+            for row in cursor.fetchall():
+                tree.insert("", "end", values=row)
+
+    def on_tree_double_click(event):
+        if current_role != "admin":
+            return
+        item = tree.selection()
+        if not item:
+            return
+        values = tree.item(item, "values")
+        version_entry.delete(0, tk.END)
+        content_entry.delete(0, tk.END)
+        version_entry.insert(0, values[0])
+        content_entry.insert(0, values[2])
+        status_var.set(f"目前編輯中版本：{values[0]}")
+        nonlocal original_content
+        original_content = values[2]
+        validate_version()
+        on_content_change()
+
+    tree.bind("<Double-1>", on_tree_double_click)
+
+    refresh_changelog()

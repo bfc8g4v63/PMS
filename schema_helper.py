@@ -1,4 +1,5 @@
 import sqlite3
+import re
 
 def get_required_columns():
     return {
@@ -49,6 +50,19 @@ def auto_add_missing_columns(db_path, schema_map):
                     except sqlite3.OperationalError as e:
                         print(f"欄位新增失敗 {col_name}@{table}: {e}")
 
+def ensure_changelog_table_exists(db_path):
+    with sqlite3.connect(db_path, timeout=10) as conn:
+        conn.execute("PRAGMA journal_mode=WAL;")
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS changelog (
+                version TEXT PRIMARY KEY,
+                date TEXT,
+                content TEXT
+            )
+        """)
+        conn.commit()
+
 def ensure_changelog_schema(db_name):
     with sqlite3.connect(db_name) as conn:
         cursor = conn.cursor()
@@ -60,4 +74,37 @@ def ensure_changelog_schema(db_name):
                 content TEXT NOT NULL
             )
         """)
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_changelog_version ON changelog(version);")
         conn.commit()
+
+def get_next_changelog_version(db_path):
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT version FROM changelog")
+        versions = cursor.fetchall()
+        version_set = set(v[0] for v in versions if re.match(r"^v\d+\.\d+\.\d+$", v[0]))
+
+        max_version = (1, 0, -1)
+        for v in version_set:
+            major, minor, patch = map(int, v[1:].split('.'))
+            if (major, minor, patch) > max_version:
+                max_version = (major, minor, patch)
+
+        major, minor, patch = max_version
+
+        if patch < 9:
+            patch += 1
+        else:
+            patch = 0
+            minor += 1
+
+        next_version = f"v{major}.{minor}.{patch}"
+        while next_version in version_set:
+            if patch < 9:
+                patch += 1
+            else:
+                patch = 0
+                minor += 1
+            next_version = f"v{major}.{minor}.{patch}"
+
+        return next_version

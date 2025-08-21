@@ -13,13 +13,16 @@ import math
 
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
+from schema_helper import ensure_changelog_schema
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 from changelog_tab import build_changelog_tab
+from schema_helper import ensure_changelog_table_exists
 from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
 
+ensure_changelog_table_exists(DB_NAME)
 
 if USE_LOCAL_DB:
     DB_NAME = LOCAL_DB_PATH
