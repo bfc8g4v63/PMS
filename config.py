@@ -1,6 +1,6 @@
 import os
 
-USE_LOCAL_DB = False  # True: 本地測試, False: 寫入 Main Server
+USE_LOCAL_DB = True  # True: 本地測試, False: 寫入 Main Server
 
 BASE_LOCAL_PATH = r"C:\Nelson\Dev\GitHub\PMS"
 BASE_NETWORK_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"
