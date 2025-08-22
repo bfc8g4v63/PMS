@@ -1,6 +1,8 @@
 import sqlite3
 from datetime import datetime
 from config import DB_NAME
+from fixture_tabs import build_fixture_tab, build_fixture_bom_tab
+
 
 def ensure_inventory_schema():
     ddl = """
@@ -27,7 +29,7 @@ def ensure_inventory_schema():
     CREATE TABLE IF NOT EXISTS stock_moves (
         move_id        INTEGER PRIMARY KEY AUTOINCREMENT,
         move_time      TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%S','now','localtime')),
-        move_type      TEXT NOT NULL,
+        move_type      TEXT NOT NULL,  -- 入庫, 出庫, 轉倉
         fixture_id     INTEGER NOT NULL REFERENCES fixtures(fixture_id) ON DELETE RESTRICT,
         from_wh        INTEGER REFERENCES warehouses(warehouse_id) ON DELETE RESTRICT,
         to_wh          INTEGER REFERENCES warehouses(warehouse_id) ON DELETE RESTRICT,
@@ -42,6 +44,14 @@ def ensure_inventory_schema():
         warehouse_id   INTEGER NOT NULL REFERENCES warehouses(warehouse_id) ON DELETE CASCADE,
         qty            INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (fixture_id, warehouse_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS fixture_boms (
+        bom_id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        product_code  TEXT NOT NULL,  -- 可選：參考 products.product_code
+        fixture_id    INTEGER NOT NULL REFERENCES fixtures(fixture_id) ON DELETE CASCADE,
+        qty           INTEGER NOT NULL,
+        note          TEXT
     );
 
     CREATE VIEW IF NOT EXISTS v_item_stock_summary AS

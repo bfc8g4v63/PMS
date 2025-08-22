@@ -1,4 +1,4 @@
-#  生產資訊平台開發進度 (Production Information Platform)
+#  SOP資訊平台開發進度 (Production Information Platform)
 
 ---
 
@@ -37,7 +37,7 @@
 * [x] 使用者介面設計（Tkinter Layout）
 * [x] 分頁設計（Tab-Based Interface）
 
-  * 生產資訊（Production Info）
+  * SOP資訊（Production Info）
   * SOP 生成與套用（SOP Generation & Application）
   * 帳號管理（User Management）
   * 操作紀錄（Activity Logs）

@@ -20,6 +20,7 @@ from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 from changelog_tab import build_changelog_tab
 from schema_helper import ensure_changelog_table_exists
+from fixture_tabs import build_fixture_tab, build_fixture_bom_tab
 from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
 
 ensure_changelog_table_exists(DB_NAME)
@@ -394,7 +395,7 @@ def save_file(file_path, target_folder, username, product_code=None, product_nam
     try:
         shutil.copy(file_path, target_path)
         if log:
-            log_activity(DB_NAME, username, "新增SOP", filename, module="生產資訊")
+            log_activity(DB_NAME, username, "新增SOP", filename, module="SOP資訊")
         return filename
     except Exception as e:
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
@@ -435,7 +436,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
-    log_activity(DB_NAME, current_user, "更新SOP", display_name, module="生產資訊")
+    log_activity(DB_NAME, current_user, "更新SOP", display_name, module="SOP資訊")
 
     return display_name
 
@@ -541,7 +542,7 @@ def create_main_interface(root, db_name, login_info):
     notebook.pack(fill="both", expand=True)
 
     tabs = {
-        "生產資訊": tk.Frame(notebook),
+        "SOP資訊": tk.Frame(notebook),
         "SOP生成": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
@@ -556,6 +557,12 @@ def create_main_interface(root, db_name, login_info):
     for name, frame in tabs.items():
         if frame:
             notebook.add(frame, text=name)
+
+    if current_role in ("admin", "engineer"):
+        if tabs.get("治具管理"):
+            build_fixture_tab(tabs["治具管理"], current_user, db_name)
+        if tabs.get("測試BOM"):
+            build_fixture_bom_tab(tabs["測試BOM"], current_user, db_name)
 
     if current_role in ("admin", "engineer"):
         sop_tab = tabs["SOP生成"]
@@ -575,7 +582,7 @@ def create_main_interface(root, db_name, login_info):
     if current_role == "admin":
         build_user_management_tab(tabs["帳號管理"], db_name, current_user)
 
-    frame = tabs["生產資訊"]
+    frame = tabs["SOP資訊"]
     if current_role != "leader":
         form = tk.LabelFrame(frame, text="新增紀錄")
         form.pack(fill="x", padx=10, pady=5)
@@ -622,15 +629,15 @@ def create_main_interface(root, db_name, login_info):
                 o_file, o_time = save_file_if_exist(entry_oqc.get().strip(), OQC_PATH, current_user, code, name, "oqc_checklist")
 
                 if d_file:
-                    log_activity(db_name, current_user, "新增SOP", d_file, module="生產資訊")
+                    log_activity(db_name, current_user, "新增SOP", d_file, module="SOP資訊")
                 if a_file:
-                    log_activity(db_name, current_user, "新增SOP", a_file, module="生產資訊")
+                    log_activity(db_name, current_user, "新增SOP", a_file, module="SOP資訊")
                 if t_file:
-                    log_activity(db_name, current_user, "新增SOP", t_file, module="生產資訊")
+                    log_activity(db_name, current_user, "新增SOP", t_file, module="SOP資訊")
                 if p_file:
-                    log_activity(db_name, current_user, "新增SOP", p_file, module="生產資訊")
+                    log_activity(db_name, current_user, "新增SOP", p_file, module="SOP資訊")
                 if o_file:
-                    log_activity(db_name, current_user, "新增SOP", o_file, module="生產資訊")
+                    log_activity(db_name, current_user, "新增SOP", o_file, module="SOP資訊")
 
                 cursor.execute("""
                     INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
@@ -671,7 +678,11 @@ def create_main_interface(root, db_name, login_info):
         tree.heading(col, text=col)
         tree.column(col, width=120)
     tree.pack(fill="both", expand=True, padx=10, pady=5)
-    
+
+    sop_stats_var = tk.StringVar()
+    sop_stats_label = tk.Label(frame, textvariable=sop_stats_var, anchor="w", fg="blue", font=("Arial", 10))
+    sop_stats_label.pack(fill="x", padx=10, pady=(0, 5))
+
     def on_right_click(event):
         if current_role not in ("admin", "engineer"):
             return
@@ -719,7 +730,7 @@ def create_main_interface(root, db_name, login_info):
                     conn.commit()
                     conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
                 for code in deleted_items:
-                    log_activity(DB_NAME, current_user, "delete", code, module="生產資訊")
+                    log_activity(DB_NAME, current_user, "delete", code, module="SOP資訊")
 
                 query_data()
 
@@ -803,7 +814,27 @@ def create_main_interface(root, db_name, login_info):
                         row_display[i] = ""
 
                 tree.insert('', tk.END, values=row_display, tags=("bypass",) if "（已停用）" in str(row_display) else "")
+                update_sop_statistics()
+    def update_sop_statistics():
+        """統計每種 SOP 欄位有上傳的料號數量"""
+        stats = {
+            "DIP SOP": 0,
+            "組裝 SOP": 0,
+            "測試 SOP": 0,
+            "包裝 SOP": 0,
+            "檢查表 OQC": 0
+        }
 
+        for row in tree.get_children():
+            values = tree.item(row)["values"]
+            if values[2]: stats["DIP SOP"] += 1
+            if values[3]: stats["組裝 SOP"] += 1
+            if values[4]: stats["測試 SOP"] += 1
+            if values[5]: stats["包裝 SOP"] += 1
+            if values[6]: stats["檢查表 OQC"] += 1
+
+        sop_stats_var.set("　｜　".join([f"{k}: {v}" for k, v in stats.items()]))
+             
     def on_double_click(event):
         item = tree.identify_row(event.y)
         col = tree.identify_column(event.x)

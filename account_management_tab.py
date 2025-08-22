@@ -16,7 +16,7 @@ def build_user_management_tab(tab, db_name, current_user):
         "can_view_logs": {"label": "可見操作紀錄", "default": 1},
         "can_delete_logs": {"label": "刪除操作紀錄", "default": 0},
         "can_upload_sop": {"label": "上傳SOP", "default": 1},
-        "can_view_issues": {"label": "可見生產資訊", "default": 1},
+        "can_view_issues": {"label": "可見SOP資訊", "default": 1},
         "can_manage_users": {"label": "帳號管理", "default": 0}
     }
 
