@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36" version="28.1.1">
   <diagram name="第1頁" id="_NxodvjAOO-UwxukyWYw">
-    <mxGraphModel dx="2399" dy="886" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="3073" dy="1266" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -28,8 +28,8 @@
         <mxCell id="GHc4ciqTXYVALi_jFt4Q-9" value="&lt;p style=&quot;margin: 0px; margin-top: 4px; text-align: center; text-decoration: underline;&quot;&gt;Factory&lt;/p&gt;&lt;hr&gt;&lt;p style=&quot;margin: 0px; margin-left: 8px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/p&gt;&lt;p style=&quot;margin: 0px; margin-left: 8px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;&lt;br&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;&lt;span style=&quot;white-space: pre;&quot;&gt;&#x9;&lt;/span&gt;上齊&lt;/span&gt;&lt;/p&gt;&lt;p style=&quot;margin: 0px; margin-left: 8px;&quot;&gt;&lt;/p&gt;&lt;p style=&quot;margin: 0px; margin-left: 8px;&quot;&gt;&lt;/p&gt;" style="verticalAlign=middle;align=center;overflow=fill;fontSize=12;fontFamily=Helvetica;html=1;rounded=1;fontStyle=1;strokeWidth=3;fillColor=#E6FFCC;strokeOpacity=100;" parent="1" vertex="1">
           <mxGeometry x="92" y="1027" width="110" height="110" as="geometry" />
         </mxCell>
-        <mxCell id="GHc4ciqTXYVALi_jFt4Q-13" value="&lt;p style=&quot;margin: 0px; margin-top: 4px; text-align: center; text-decoration: underline;&quot;&gt;&lt;strong&gt;Start&lt;/strong&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style=&quot;margin: 0px 0px 0px 8px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;br&gt;開始&lt;/span&gt;&lt;/p&gt;" style="verticalAlign=middle;align=center;overflow=fill;fontSize=12;fontFamily=Helvetica;html=1;rounded=1;fontStyle=1;strokeWidth=3;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
-          <mxGeometry x="1210.5" y="79" width="110" height="90" as="geometry" />
+        <mxCell id="GHc4ciqTXYVALi_jFt4Q-13" value="&lt;p style=&quot;margin: 0px; margin-top: 4px; text-align: center; text-decoration: underline;&quot;&gt;&lt;strong&gt;Start&lt;/strong&gt;&lt;/p&gt;&lt;hr&gt;&lt;p style=&quot;margin: 0px 0px 0px 8px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;&lt;br&gt;&lt;br&gt;&lt;/span&gt;&lt;/p&gt;&lt;p style=&quot;margin: 0px 0px 0px 8px;&quot;&gt;&lt;span style=&quot;background-color: transparent; color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;開始&lt;/span&gt;&lt;/p&gt;" style="verticalAlign=middle;align=center;overflow=fill;fontSize=12;fontFamily=Helvetica;html=1;rounded=1;fontStyle=1;strokeWidth=3;fillColor=#dae8fc;strokeColor=#6c8ebf;" parent="1" vertex="1">
+          <mxGeometry x="1187.75" y="22" width="155.5" height="120" as="geometry" />
         </mxCell>
         <mxCell id="VIas7DstL4jLXsS-fGNQ-2" value="治具管理&#xa;&#xa;新增治具料號(8或12碼)/入庫/轉倉/扣帳&#xa;查詢/分倉統計/即時刷新" style="shape=process;whiteSpace=wrap;align=center;verticalAlign=middle;size=0.0475;fontStyle=1;strokeWidth=3;fillColor=#FFCCCC;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;flipH=0;flipV=0;fontSize=12;" parent="1" vertex="1">
           <mxGeometry x="845.4999999999999" y="709.5" width="400" height="91" as="geometry" />
@@ -418,7 +418,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="KoE7ukDnv905fSBD4YSp-1" value="" style="strokeColor=#000000;strokeWidth=2;rounded=1;endArrow=classicThin;endFill=1;edgeStyle=orthogonalEdgeStyle;startArrow=classicThin;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;elbow=vertical;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="VIas7DstL4jLXsS-fGNQ-149" target="VIas7DstL4jLXsS-fGNQ-199">
+        <mxCell id="KoE7ukDnv905fSBD4YSp-1" value="" style="strokeColor=#000000;strokeWidth=2;rounded=1;endArrow=classicThin;endFill=1;edgeStyle=orthogonalEdgeStyle;startArrow=classicThin;startFill=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;elbow=vertical;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" source="VIas7DstL4jLXsS-fGNQ-149" target="VIas7DstL4jLXsS-fGNQ-199" edge="1">
           <mxGeometry width="100" height="100" relative="1" as="geometry">
             <mxPoint x="2014" y="2574" as="sourcePoint" />
             <mxPoint x="387" y="3650" as="targetPoint" />
@@ -427,7 +427,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="KoE7ukDnv905fSBD4YSp-2" value="" style="strokeColor=#000000;strokeWidth=2;rounded=1;endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;startArrow=none;startFill=0;elbow=vertical;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="VIas7DstL4jLXsS-fGNQ-200">
+        <mxCell id="KoE7ukDnv905fSBD4YSp-2" value="" style="strokeColor=#000000;strokeWidth=2;rounded=1;endArrow=classic;endFill=1;edgeStyle=orthogonalEdgeStyle;startArrow=none;startFill=0;elbow=vertical;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="1" target="VIas7DstL4jLXsS-fGNQ-200" edge="1">
           <mxGeometry width="100" height="100" relative="1" as="geometry">
             <mxPoint x="1128" y="3228" as="sourcePoint" />
             <mxPoint x="2002" y="4385" as="targetPoint" />
