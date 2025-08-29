@@ -4,6 +4,8 @@ import subprocess
 import sys
 from tkinter import messagebox
 from datetime import datetime
+import threading
+import functools
 
 def open_file(filepath):
     try:
@@ -41,3 +43,20 @@ def log_activity(db_name, user, action, filename, module=None):
         """, (user, action, filename, datetime.now().strftime("%Y%m%dT%H%M%S"), module))
         conn.commit()
         conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
+def safe_button_action(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        widget = kwargs.get('button')
+        if widget:
+            widget.config(state='disabled')
+        def run():
+            try:
+                func(*args, **kwargs)
+            except Exception as e:
+                messagebox.showerror("錯誤", str(e))
+            finally:
+                if widget:
+                    widget.config(state='normal')
+        threading.Thread(target=run).start()
+    return wrapper

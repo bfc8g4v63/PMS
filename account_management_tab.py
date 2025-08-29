@@ -1,3 +1,4 @@
+# account_management_tab.py
 import tkinter as tk
 import sqlite3
 import hashlib

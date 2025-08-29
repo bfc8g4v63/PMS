@@ -1,3 +1,4 @@
+# schema_helper.py
 import sqlite3
 import re
 
