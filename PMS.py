@@ -30,26 +30,14 @@ elif os.path.exists(Z_DRIVE_DB):
     DB_NAME = Z_DRIVE_DB
 else:
     DB_NAME = UNC_DB
-
 import fixture_helper as FH
 FH.set_db_path(DB_NAME)
 FH.ensure_schemas()
-
-login_info = None
-try:
-    with sqlite3.connect(DB_NAME, timeout=10) as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        cursor = conn.cursor()
-        cursor.execute("SELECT role FROM users WHERE username=?", (os.getlogin(),))
-        result = cursor.fetchone()
-        if result and result[0] in ("admin", "engineer"):
-            ensure_changelog_table_exists(DB_NAME)
-except Exception as e:
-    print(f"[初始化 changelog 跳過] {e}")
+ensure_changelog_table_exists(DB_NAME)
 
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 
-print(f"\u4f7f\u7528\u8cc7\u6599\u5eab\uff1a{DB_NAME}")
+print(f"使用資料庫：{DB_NAME}")
 
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
 with open(lock_path, "w") as f:
@@ -917,37 +905,59 @@ if __name__ == "__main__":
         root = tk.Tk()
         root.title("生產管理平台")
         root.geometry("1200x750")
+        
         IDLE_TIMEOUT_MS = 3 * 60 * 1000
+        WARNING_TIMEOUT_MS = 2 * 60 * 1000
+
         def reset_idle_timer(event=None):
             if hasattr(root, "_idle_after_id"):
                 root.after_cancel(root._idle_after_id)
             if hasattr(root, "_warning_after_id"):
                 root.after_cancel(root._warning_after_id)
+
+            root._warning_after_id = root.after(WARNING_TIMEOUT_MS, on_idle_warning)
+            
+            root._idle_after_id = root.after(IDLE_TIMEOUT_MS, on_idle_timeout)
+
+        def on_idle_warning():
+            messagebox.showwarning("閒置警告", "您已閒置 2 分鐘，若再 1 分鐘未操作將自動登出。")
+
         def on_idle_timeout():
             messagebox.showinfo("自動登出", "您已閒置超過 3 分鐘，系統將自動登出")
             logout_and_exit(root)
+
         for event_type in ["<Motion>", "<Key>", "<Button>"]:
             root.bind_all(event_type, reset_idle_timer)
+
         reset_idle_timer()
+
         try:
             root.iconbitmap("PMS.ico")
         except:
             pass
+
         import tkinter.font as tkFont
         default_font = tkFont.nametofont("TkDefaultFont")
         default_font.configure(size=10, family="Microsoft Calibri")
+
         top_bar = tk.Frame(root)
         top_bar.pack(fill="x", side="top")
+
         logout_btn = tk.Button(top_bar, text="登出並關閉", command=lambda: logout_and_exit(root), bg="orange")
         logout_btn.pack(side="right", padx=10, pady=5)
+
         change_pw_btn = tk.Button(top_bar, text="變更密碼", bg="lightgreen",
             command=lambda: open_password_change_window(root, DB_NAME, login_info["user"]))
         change_pw_btn.pack(side="right", padx=10, pady=(0, 0))
+
         user_info = f"使用者：{login_info['user']}（{login_info['role']}）"
         tk.Label(top_bar, text=user_info).pack(side="right", padx=10)
+
         main_frame = tk.Frame(root)
         main_frame.pack(fill="both", expand=True)
+
         create_main_interface(main_frame, DB_NAME, login_info)
+
         def on_close():
             logout_and_exit(root)
         root.protocol("WM_DELETE_WINDOW", on_close)

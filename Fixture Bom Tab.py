@@ -1,4 +1,4 @@
-# Fixture Bom Tab.py
+# fixture BOM Tab.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (
