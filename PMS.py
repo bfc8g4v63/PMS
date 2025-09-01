@@ -916,15 +916,23 @@ if __name__ == "__main__":
                 root.after_cancel(root._warning_after_id)
 
             root._warning_after_id = root.after(WARNING_TIMEOUT_MS, on_idle_warning)
-            
             root._idle_after_id = root.after(IDLE_TIMEOUT_MS, on_idle_timeout)
 
         def on_idle_warning():
-            messagebox.showwarning("閒置警告", "您已閒置 2 分鐘，若再 1 分鐘未操作將自動登出。")
+            try:
+                messagebox.showwarning("閒置警告", "您已閒置 2 分鐘，若再 1 分鐘未操作將自動登出。")
+            except:
+                pass
 
         def on_idle_timeout():
-            messagebox.showinfo("自動登出", "您已閒置超過 3 分鐘，系統將自動登出")
-            logout_and_exit(root)
+
+            try:
+                toplevel = tk.Toplevel(root)
+                toplevel.title("自動登出")
+                tk.Label(toplevel, text="您已閒置超過 3 分鐘，系統將自動登出").pack(padx=20, pady=20)
+                toplevel.after(2000, lambda: logout_and_exit(root))
+            except:
+                logout_and_exit(root)
 
         for event_type in ["<Motion>", "<Key>", "<Button>"]:
             root.bind_all(event_type, reset_idle_timer)
