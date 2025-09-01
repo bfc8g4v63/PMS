@@ -301,7 +301,7 @@ def build_user_management_tab(tab, db_name, current_user):
             messagebox.showwarning("未選擇", "請選擇帳號")
             return
         username = tree.item(selected[0])["values"][0]
-        if username == current_user:
+        if username == current_user.get("user"):
             messagebox.showerror("錯誤", "無法刪除自己")
             return
         if messagebox.askyesno("確認", f"是否確定要刪除帳號「{username}」？"):
