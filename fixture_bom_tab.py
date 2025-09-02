@@ -1,19 +1,10 @@
-# fixture BOM Tab.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (
-    insert_fixture,
-    add_stock,
-    transfer_stock,
-    consume_stock,
-    get_overview_by_warehouse,
     get_bom_by_part,
     add_bom_item,
-    delete_bom_item,
-    CORE_WAREHOUSES
+    delete_bom_item
 )
-
-WAREHOUSES_ALL = CORE_WAREHOUSES + ["消耗"]
 
 def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = None) -> tk.Frame:
     root = tk.Frame(parent)
@@ -33,14 +24,16 @@ def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = N
     mid = ttk.LabelFrame(root, text="BOM 清單")
     mid.pack(fill="both", expand=True, padx=8, pady=6)
 
-    columns = ("bom_id", "fixture_name", "quantity", "created_at")
+    columns = ("bom_id", "child_part_no", "quantity")
     tree = ttk.Treeview(mid, columns=columns, show="headings")
-    for col, text in zip(columns, ["ID", "治具名稱", "數量", "建立時間"]):
-        tree.heading(col, text=text)
+    tree.heading("bom_id", text="ID")
+    tree.heading("child_part_no", text="治具料號")
+    tree.heading("quantity", text="數量")
+
     tree.column("bom_id", width=60, anchor="center")
-    tree.column("fixture_name", width=180, anchor="w")
+    tree.column("child_part_no", width=180, anchor="w")
     tree.column("quantity", width=80, anchor="e")
-    tree.column("created_at", width=140, anchor="center")
+
     vsb = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=vsb.set)
     tree.pack(side="left", fill="both", expand=True)
@@ -51,7 +44,7 @@ def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = N
 
     bom_name_var = tk.StringVar()
     bom_qty_var = tk.StringVar()
-    tk.Label(bottom, text="治具名稱").grid(row=0, column=0, sticky="e", padx=4, pady=3)
+    tk.Label(bottom, text="治具料號").grid(row=0, column=0, sticky="e", padx=4, pady=3)
     tk.Entry(bottom, textvariable=bom_name_var, width=28).grid(row=0, column=1, padx=4, pady=3)
     tk.Label(bottom, text="數量").grid(row=0, column=2, sticky="e", padx=4, pady=3)
     tk.Entry(bottom, textvariable=bom_qty_var, width=8).grid(row=0, column=3, padx=4, pady=3)
@@ -70,7 +63,7 @@ def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = N
                 tree.delete(i)
             rows = get_bom_by_part(part)
             for row in rows:
-                tree.insert("", "end", values=(row["bom_id"], row["fixture_name"], row["quantity"], row["created_at"]))
+                tree.insert("", "end", values=(row[0], row[1], row[2]))
         except Exception as e:
             messagebox.showerror("查詢失敗", str(e))
 

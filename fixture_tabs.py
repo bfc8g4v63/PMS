@@ -1,225 +1,231 @@
-# fixture_tabs.py
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (
     insert_fixture,
+    delete_fixture,
     add_stock,
     transfer_stock,
-    consume_stock,
     get_overview_by_warehouse,
     CORE_WAREHOUSES
 )
 
-WAREHOUSES = [
-    "治具室", "上齊", "睿均", "捷曄", "立榮",
-    "華勳", "上貿", "麥博", "GC", "不良品"
+CATEGORIES = [
+    "電腦/設備類",
+    "載具類",
+    "治具類",
+    "裸板類",
+    "主機類",
+    "測具/板子類",
+    "線材類",
+    "卡片類",
+    "電供類",
+    "消耗類"
 ]
 
-WAREHOUSES_ALL = CORE_WAREHOUSES + ["消耗"]
+def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
+    frames = {}
+    trees = {}
+    total_labels = {}
 
-def _validate_part_no_local(part_no: str) -> None:
-    p = (part_no or "").strip()
-    if len(p) not in (8, 12) or (not p.isdigit()):
-        raise ValueError("料號必須為 8 或 12 碼數字。")
-
-def build_fixture_tab(parent: tk.Widget, current_user: str, db_name: str = None) -> tk.Frame:
-    root = tk.Frame(parent)
-    root.pack(fill="both", expand=True)
-    control_frame = tk.Frame(root)
-    control_frame.pack(fill="x", padx=8, pady=6)
-    search_var = tk.StringVar()
-    tk.Label(control_frame, text="依料號查詢").grid(row=0, column=0, sticky="w")
-    tk.Entry(control_frame, textvariable=search_var, width=20).grid(row=0, column=1, padx=(6, 12))
-    btn_search = tk.Button(control_frame, text="查詢", width=8)
-    btn_search.grid(row=0, column=2, padx=4)
-    btn_reset = tk.Button(control_frame, text="重置", width=8, command=lambda: [search_var.set(""), refresh_tables()])
-    btn_reset.grid(row=0, column=3, padx=4)
-
-    notebook = ttk.Notebook(root)
+    notebook = ttk.Notebook(parent)
     notebook.pack(fill="both", expand=True)
-
-    tree_views = {}
-
-    def refresh_tables():
-        try:
-            part_filter = search_var.get().strip() or None
-            data, warehouses = get_overview_by_warehouse(part_filter)
-            for wh in CORE_WAREHOUSES:
-                tree = tree_views.get(wh)
-                if not tree: continue
-                tree.delete(*tree.get_children())
-                for row in data:
-                    qty = row.get(wh, 0)
-                    if qty > 0:
-                        tree.insert("", "end", values=(
-                            row["part_no"], row["name"], row["type"], row.get("spec", ""), qty
-                        ))
-        except Exception as e:
-            messagebox.showerror("錯誤", f"更新表格失敗：{e}")
-
-    def open_stockin_window():
-        win = tk.Toplevel()
-        win.title("⭫ 入庫操作")
-        win.geometry("320x250")
-
-        tk.Label(win, text="選擇料號", font=("Arial", 10)).pack(pady=10)
-
-        frm = ttk.Frame(win)
-        frm.pack(pady=5)
-
-        tk.Label(frm, text="料號:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
-        part_combo = ttk.Combobox(frm, values=[], state="readonly", width=20)
-        part_combo.grid(row=0, column=1)
-
-        tk.Label(frm, text="數量:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
-        qty_entry = ttk.Entry(frm)
-        qty_entry.grid(row=1, column=1)
-
-        tk.Label(frm, text="備註:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
-        remark_entry = ttk.Entry(frm)
-        remark_entry.grid(row=2, column=1)
-
-        try:
-            data, _ = get_overview_by_warehouse()
-            part_combo["values"] = [r["part_no"] for r in data]
-        except Exception as e:
-            messagebox.showerror("錯誤", f"載入料號失敗：{e}")
-
-        def do_stockin():
-            part_no = part_combo.get()
-            try:
-                qty = int(qty_entry.get())
-                remark = remark_entry.get()
-                result = add_stock(part_no, qty, current_user, remark)
-                messagebox.showinfo("成功", f"已入庫 {qty} 件\n料號：{part_no}")
-                win.destroy()
-                refresh_tables()
-            except Exception as e:
-                messagebox.showerror("錯誤", str(e))
-
-        ttk.Button(win, text="執行入庫", command=do_stockin).pack(pady=10)
-
-    def open_transfer_window():
-        win = tk.Toplevel()
-        win.title("🔁 轉倉操作")
-        win.geometry("340x280")
-
-        frm = ttk.Frame(win)
-        frm.pack(pady=10)
-
-        tk.Label(frm, text="料號:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
-        part_combo = ttk.Combobox(frm, values=[], state="readonly", width=22)
-        part_combo.grid(row=0, column=1)
-
-        tk.Label(frm, text="來源倉:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
-        from_wh = ttk.Combobox(frm, values=CORE_WAREHOUSES, state="readonly")
-        from_wh.grid(row=1, column=1)
-
-        tk.Label(frm, text="目的倉:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
-        to_wh = ttk.Combobox(frm, values=CORE_WAREHOUSES, state="readonly")
-        to_wh.grid(row=2, column=1)
-
-        tk.Label(frm, text="數量:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
-        qty_entry = ttk.Entry(frm)
-        qty_entry.grid(row=3, column=1)
-
-        tk.Label(frm, text="備註:").grid(row=4, column=0, sticky="e", padx=5, pady=5)
-        remark_entry = ttk.Entry(frm)
-        remark_entry.grid(row=4, column=1)
-
-        try:
-            data, _ = get_overview_by_warehouse()
-            part_combo["values"] = [r["part_no"] for r in data]
-        except Exception as e:
-            messagebox.showerror("錯誤", f"載入料號失敗：{e}")
-
-        def do_transfer():
-            try:
-                part = part_combo.get()
-                qty = int(qty_entry.get())
-                result = transfer_stock(part, from_wh.get(), to_wh.get(), qty, current_user, remark_entry.get())
-                messagebox.showinfo("成功", f"已完成轉倉\n料號: {part}\n數量: {qty}")
-                win.destroy()
-                refresh_tables()
-            except Exception as e:
-                messagebox.showerror("錯誤", str(e))
-
-        ttk.Button(win, text="執行轉倉", command=do_transfer).pack(pady=10)
-
-    def open_consume_window():
-        win = tk.Toplevel()
-        win.title("⚙️ 消耗操作")
-        win.geometry("340x300")
-
-        frm = ttk.Frame(win)
-        frm.pack(pady=10)
-
-        tk.Label(frm, text="料號:").grid(row=0, column=0, sticky="e", padx=5, pady=5)
-        part_combo = ttk.Combobox(frm, values=[], state="readonly", width=22)
-        part_combo.grid(row=0, column=1)
-
-        tk.Label(frm, text="來源倉:").grid(row=1, column=0, sticky="e", padx=5, pady=5)
-        from_wh = ttk.Combobox(frm, values=CORE_WAREHOUSES, state="readonly")
-        from_wh.grid(row=1, column=1)
-
-        tk.Label(frm, text="數量:").grid(row=2, column=0, sticky="e", padx=5, pady=5)
-        qty_entry = ttk.Entry(frm)
-        qty_entry.grid(row=2, column=1)
-
-        tk.Label(frm, text="產線:").grid(row=3, column=0, sticky="e", padx=5, pady=5)
-        line_entry = ttk.Entry(frm)
-        line_entry.grid(row=3, column=1)
-
-        tk.Label(frm, text="用途:").grid(row=4, column=0, sticky="e", padx=5, pady=5)
-        purpose_entry = ttk.Entry(frm)
-        purpose_entry.grid(row=4, column=1)
-
-        try:
-            data, _ = get_overview_by_warehouse()
-            part_combo["values"] = [r["part_no"] for r in data]
-        except Exception as e:
-            messagebox.showerror("錯誤", f"載入料號失敗：{e}")
-
-        def do_consume():
-            try:
-                result = consume_stock(
-                    part_no=part_combo.get(),
-                    qty=int(qty_entry.get()),
-                    user=current_user,
-                    line=line_entry.get(),
-                    purpose=purpose_entry.get(),
-                    from_wh=from_wh.get(),
-                    move_to_consumed=True
-                )
-                messagebox.showinfo("成功", f"已完成消耗\n料號: {result['fixture_id']}\n數量: {result['consumed']}")
-                win.destroy()
-                refresh_tables()
-            except Exception as e:
-                messagebox.showerror("錯誤", str(e))
-
-        ttk.Button(win, text="執行消耗", command=do_consume).pack(pady=10)
 
     for wh in CORE_WAREHOUSES:
         frame = ttk.Frame(notebook)
+        frames[wh] = frame
         notebook.add(frame, text=wh)
 
-        tree = ttk.Treeview(frame, columns=("料號", "名稱", "分類", "規格", "數量"), show="headings")
-        for col in ("料號", "名稱", "分類", "規格", "數量"):
-            tree.heading(col, text=col)
+        topbar = ttk.Frame(frame)
+        topbar.pack(fill="x")
+        total_label = ttk.Label(topbar, text="合計: 0")
+        total_label.pack(side="right", padx=8, pady=4)
+        total_labels[wh] = total_label
+
+        columns = ("part_no", "name", "spec", "category", "qty")
+        tree = ttk.Treeview(frame, columns=columns, show="headings")
+        trees[wh] = tree
+
+        tree.heading("part_no", text="治具料號")
+        tree.heading("name", text="治具品名")
+        tree.heading("spec", text="治具規格")
+        tree.heading("category", text="治具類群")
+        tree.heading("qty", text="數量")
+
+        tree.column("part_no", width=20, anchor="center")
+        tree.column("name", width=350, anchor="center")
+        tree.column("spec", width=350, anchor="center")
+        tree.column("category", width=20, anchor="center")
+        tree.column("qty", width=20, anchor="center")
+
         tree.pack(fill="both", expand=True)
-        tree_views[wh] = tree
 
-        btn_frame = ttk.Frame(frame)
-        btn_frame.pack(pady=4)
-        ttk.Button(btn_frame, text="🔁 轉倉操作", command=open_transfer_window).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="⏫ 入庫操作", command=open_stockin_window).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="⚙️ 消耗操作", command=open_consume_window).pack(side="left", padx=4)
+        refresh_fixture_tree(tree, wh, total_label)
 
-    refresh_tables()
-    btn_search.config(command=refresh_tables)
-    return root
+        def on_tree_double_click(event, tree=tree):
+            sel = tree.selection()
+            if not sel:
+                return
+            vals = tree.item(sel[0], "values")
+            entry_part.delete(0, tk.END)
+            entry_part.insert(0, vals[0])
+            entry_name.delete(0, tk.END)
+            entry_name.insert(0, vals[1])
+            entry_spec.delete(0, tk.END)
+            entry_spec.insert(0, vals[2])
+            combo_cat.set(vals[3])
 
-def build_fixture_bom_tab(parent, current_user, db_name):
-    frame = ttk.Frame(parent)
-    ttk.Label(frame, text="測試BOM分頁（開發中）", font=("Arial", 12)).pack(pady=10)
-    return frame
+        tree.bind("<Double-1>", on_tree_double_click)
+
+    control_frame = ttk.Frame(parent)
+    control_frame.pack(fill="x", pady=10)
+
+    ttk.Label(control_frame, text="治具料號:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+    entry_part = ttk.Entry(control_frame)
+    entry_part.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+    ttk.Label(control_frame, text="治具品名:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+    entry_name = ttk.Entry(control_frame)
+    entry_name.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+
+    ttk.Label(control_frame, text="治具規格:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+    entry_spec = ttk.Entry(control_frame)
+    entry_spec.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+
+    ttk.Label(control_frame, text="治具類群:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+    combo_cat = ttk.Combobox(control_frame, values=CATEGORIES, state="readonly")
+    combo_cat.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+
+    def on_add_fixture():
+        part = entry_part.get().strip()
+        name = entry_name.get().strip()
+        spec = entry_spec.get().strip()
+        cat = combo_cat.get().strip()
+        if not (part.isdigit() and len(part) in (8, 12)):
+            messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
+            return
+        if not name or not spec or not cat:
+            messagebox.showerror("錯誤", "治具品名、治具規格、治具類群不可為空")
+            return
+        try:
+            insert_fixture(part, name, spec, cat, 0)
+            messagebox.showinfo("完成", f"已新增治具料號 {part}")
+            for wh in CORE_WAREHOUSES:
+                refresh_fixture_tree(trees[wh], wh, total_labels[wh])
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
+
+    def on_delete_fixture():
+        part = entry_part.get().strip()
+        if not (part.isdigit() and len(part) in (8, 12)):
+            messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
+            return
+        confirm = messagebox.askyesno("確認刪除", f"確定要刪除治具料號 {part}？\n此動作會移除所有倉別的存量與 BOM。")
+        if not confirm:
+            return
+        try:
+            delete_fixture(part)
+            messagebox.showinfo("完成", f"已刪除治具料號 {part}")
+            for wh in CORE_WAREHOUSES:
+                refresh_fixture_tree(trees[wh], wh, total_labels[wh])
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
+
+    ttk.Button(control_frame, text="新增治具", command=on_add_fixture).grid(row=0, column=2, padx=5, pady=5)
+    ttk.Button(control_frame, text="刪除治具", command=on_delete_fixture).grid(row=0, column=3, padx=5, pady=5)
+
+    ttk.Label(control_frame, text="入庫倉別:").grid(row=4, column=0, padx=5, pady=5, sticky="w")
+    combo_wh = ttk.Combobox(control_frame, values=CORE_WAREHOUSES, state="readonly")
+    combo_wh.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+    combo_wh.current(0)
+
+    ttk.Label(control_frame, text="入庫數量:").grid(row=5, column=0, padx=5, pady=5, sticky="w")
+    entry_qty = ttk.Entry(control_frame)
+    entry_qty.grid(row=5, column=1, padx=5, pady=5, sticky="w")
+
+    def on_add_stock():
+        part = entry_part.get().strip()
+        name = entry_name.get().strip()
+        spec = entry_spec.get().strip()
+        cat = combo_cat.get().strip()
+        wh = combo_wh.get()
+        try:
+            qty = int(entry_qty.get().strip())
+        except ValueError:
+            messagebox.showerror("錯誤", "數量必須是整數")
+            return
+        if not (part.isdigit() and len(part) in (8, 12)):
+            messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
+            return
+        if not name or not spec or not cat:
+            messagebox.showerror("錯誤", "治具品名、治具規格、治具類群不可為空")
+            return
+        try:
+            add_stock(part, qty, wh)
+            messagebox.showinfo("完成", f"{part} 已入庫 {qty} 至 {wh}")
+            for wh2 in CORE_WAREHOUSES:
+                refresh_fixture_tree(trees[wh2], wh2, total_labels[wh2])
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
+
+    ttk.Button(control_frame, text="⏫ 入庫", command=on_add_stock).grid(row=5, column=2, padx=5, pady=5)
+
+    transfer_frame = ttk.LabelFrame(control_frame, text="調撥")
+    transfer_frame.grid(row=6, column=0, columnspan=4, pady=10, sticky="ew")
+
+    ttk.Label(transfer_frame, text="來源倉別:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+    combo_from = ttk.Combobox(transfer_frame, values=CORE_WAREHOUSES, state="readonly")
+    combo_from.grid(row=0, column=1, padx=5, pady=5, sticky="w")
+
+    ttk.Label(transfer_frame, text="目標倉別:").grid(row=0, column=2, padx=5, pady=5, sticky="w")
+    combo_to = ttk.Combobox(transfer_frame, values=CORE_WAREHOUSES, state="readonly")
+    combo_to.grid(row=0, column=3, padx=5, pady=5, sticky="w")
+
+    ttk.Label(transfer_frame, text="數量:").grid(row=0, column=4, padx=5, pady=5, sticky="w")
+    entry_transfer_qty = ttk.Entry(transfer_frame, width=8)
+    entry_transfer_qty.grid(row=0, column=5, padx=5, pady=5, sticky="w")
+
+    def on_transfer():
+        part = entry_part.get().strip()
+        name = entry_name.get().strip()
+        spec = entry_spec.get().strip()
+        cat = combo_cat.get().strip()
+        from_wh = combo_from.get()
+        to_wh = combo_to.get()
+        try:
+            qty = int(entry_transfer_qty.get().strip())
+        except ValueError:
+            messagebox.showerror("錯誤", "數量必須是整數")
+            return
+        if not (part.isdigit() and len(part) in (8, 12)):
+            messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
+            return
+        if not name or not spec or not cat:
+            messagebox.showerror("錯誤", "治具品名、治具規格、治具類群不可為空")
+            return
+        if from_wh == to_wh:
+            messagebox.showerror("錯誤", "來源與目標倉別不可相同")
+            return
+        try:
+            transfer_stock(part, qty, from_wh, to_wh)
+            messagebox.showinfo("完成", f"{part} 已調撥 {qty} 從 {from_wh} 到 {to_wh}")
+            for wh2 in CORE_WAREHOUSES:
+                refresh_fixture_tree(trees[wh2], wh2, total_labels[wh2])
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
+
+    ttk.Button(transfer_frame, text="🔁 調撥", command=on_transfer).grid(row=0, column=6, padx=5, pady=5)
+
+def refresh_fixture_tree(tree, warehouse, total_label=None):
+    tree.delete(*tree.get_children())
+    rows = get_overview_by_warehouse(warehouse)
+
+    total = 0
+    for part_no, name, spec, category, safety_stock, qty in rows:
+        tree.insert("", "end", values=(part_no, name, spec, category, qty))
+        try:
+            total += int(qty) if qty is not None else 0
+        except:
+            pass
+
+    if total_label is not None:
+        total_label.config(text=f"合計: {total}")

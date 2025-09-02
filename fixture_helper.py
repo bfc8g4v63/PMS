@@ -1,298 +1,246 @@
-# fixture_helper.py
-from __future__ import annotations
 import sqlite3
-from contextlib import contextmanager
-from typing import Optional, Dict, Any, Tuple
+from datetime import datetime
+import os
 
-DB_PATH: Optional[str] = None
+DB_PATH = None
 
-def set_db_path(path: str) -> None:
+CORE_WAREHOUSES = [
+    "治具室",
+    "上齊",
+    "睿均",
+    "捷暉",
+    "立榮",
+    "華勤",
+    "上貿",
+    "麥博",
+    "信利",
+    "GC",
+    "工程",
+    "不良品"
+]
+
+EXCEPTIONS = set()
+
+def set_db_path(path: str):
     global DB_PATH
     DB_PATH = path
 
-CORE_WAREHOUSES = [
-    "治具室", "上齊", "睿均", "捷暉", "立榮",
-    "華勤", "上貿", "麥博", "GC", "不良品"
-]
+def get_conn():
+    if DB_PATH is None:
+        raise ValueError("DB_PATH 尚未設定，請先呼叫 set_db_path()")
+    conn = sqlite3.connect(DB_PATH, timeout=30, isolation_level=None)
+    conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
 
-CONSUMED_WAREHOUSE = "消耗"
+def add_col_if_missing(conn, table: str, col: str, col_type: str):
+    cur = conn.cursor()
+    cur.execute(f"PRAGMA table_info({table})")
+    cols = [row[1] for row in cur.fetchall()]
+    if col not in cols:
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+    cur.close()
 
-def _validate_part_no(part_no: str) -> None:
-    part_no = (part_no or "").strip()
-    if len(part_no) not in (8, 12) or not part_no.isdigit():
-        raise ValueError("料號必須為 8 或 12 碼數字。")
-
-@contextmanager
-def get_conn(db_path: Optional[str] = None):
-    db = db_path or DB_PATH
-    if not db:
-        raise RuntimeError("DB_PATH 尚未設定，請先呼叫 fixture_helper.set_db_path(DB_NAME)。")
-    conn = sqlite3.connect(db, timeout=15)
-    try:
-        conn.execute("PRAGMA journal_mode=WAL;")
-        conn.execute("PRAGMA foreign_keys=ON;")
-        conn.row_factory = sqlite3.Row
-        yield conn
-        conn.commit()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
-    except Exception:
-        conn.rollback()
-        raise
-    finally:
-        conn.close()
-
-def ensure_schemas() -> None:
+def ensure_schemas():
     with get_conn() as conn:
-        conn.execute("""
+        c = conn.cursor()
+        c.execute("""
         CREATE TABLE IF NOT EXISTS fixtures (
-            fixture_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            part_no      TEXT NOT NULL,
-            name         TEXT,
-            type         TEXT,
-            spec         TEXT,
-            safe_stock   INTEGER DEFAULT 0,
-            created_at   TEXT DEFAULT (datetime('now','localtime')),
-            UNIQUE(part_no)
-        );""")
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS warehouse_stock (
-            stock_id     INTEGER PRIMARY KEY AUTOINCREMENT,
-            fixture_id   INTEGER NOT NULL,
-            warehouse    TEXT NOT NULL,
-            qty          INTEGER NOT NULL DEFAULT 0,
-            updated_at   TEXT DEFAULT (datetime('now','localtime')),
-            FOREIGN KEY(fixture_id) REFERENCES fixtures(fixture_id),
-            UNIQUE(fixture_id, warehouse)
-        );""")
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS transfer_logs (
-            log_id       INTEGER PRIMARY KEY AUTOINCREMENT,
-            fixture_id   INTEGER NOT NULL,
-            action       TEXT NOT NULL,
-            from_wh      TEXT,
-            to_wh        TEXT,
-            qty          INTEGER NOT NULL,
-            user         TEXT,
-            remark       TEXT,
-            created_at   TEXT DEFAULT (datetime('now','localtime')),
-            FOREIGN KEY(fixture_id) REFERENCES fixtures(fixture_id)
-        );""")
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS consumption_logs (
-            consume_id   INTEGER PRIMARY KEY AUTOINCREMENT,
-            fixture_id   INTEGER NOT NULL,
-            qty          INTEGER NOT NULL,
-            user         TEXT,
-            line         TEXT,
-            purpose      TEXT,
-            created_at   TEXT DEFAULT (datetime('now','localtime')),
-            FOREIGN KEY(fixture_id) REFERENCES fixtures(fixture_id)
-        );""")
-        conn.execute("""
-        CREATE TABLE IF NOT EXISTS fixture_boms (
-            bom_id          INTEGER PRIMARY KEY AUTOINCREMENT,
-            parent_part_no  TEXT NOT NULL,
-            child_part_no   TEXT NOT NULL,
-            description     TEXT,
-            qty             INTEGER NOT NULL DEFAULT 1,
-            remark          TEXT,
-            created_at      TEXT DEFAULT (datetime('now','localtime'))
-        );
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            part_no TEXT UNIQUE,
+            description TEXT,
+            spec TEXT,
+            category TEXT,
+            safety_stock INTEGER DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
         """)
-        def add_col_if_missing(table: str, col: str, ddl: str):
-            cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
-            if col not in cols:
-                conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl};")
+        add_col_if_missing(conn, "fixtures", "description", "TEXT")
+        add_col_if_missing(conn, "fixtures", "spec", "TEXT")
+        add_col_if_missing(conn, "fixtures", "category", "TEXT")
+        add_col_if_missing(conn, "fixtures", "safety_stock", "INTEGER DEFAULT 0")
+        add_col_if_missing(conn, "fixtures", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
-        add_col_if_missing("fixtures", "name", "name TEXT")
-        add_col_if_missing("fixtures", "type", "type TEXT")
-        add_col_if_missing("fixtures", "spec", "spec TEXT")
-        add_col_if_missing("fixtures", "safe_stock", "safe_stock INTEGER DEFAULT 0")
-        add_col_if_missing("fixtures", "created_at", "created_at TEXT DEFAULT (datetime('now','localtime'))")
-        add_col_if_missing("warehouse_stock", "updated_at", "updated_at TEXT DEFAULT (datetime('now','localtime'))")
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS warehouse_stock (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            part_no TEXT,
+            warehouse TEXT,
+            qty INTEGER DEFAULT 0,
+            UNIQUE(part_no, warehouse)
+        )
+        """)
+        add_col_if_missing(conn, "warehouse_stock", "part_no", "TEXT")
+        add_col_if_missing(conn, "warehouse_stock", "warehouse", "TEXT")
+        add_col_if_missing(conn, "warehouse_stock", "qty", "INTEGER DEFAULT 0")
 
-def get_fixture_by_part_no(part_no: str) -> Optional[sqlite3.Row]:
-    _validate_part_no(part_no)
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS transfer_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            part_no TEXT,
+            from_warehouse TEXT,
+            to_warehouse TEXT,
+            qty INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        c.execute("""
+        CREATE TABLE IF NOT EXISTS fixture_boms (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            parent_part_no TEXT,
+            child_part_no TEXT,
+            qty INTEGER DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        add_col_if_missing(conn, "fixture_boms", "parent_part_no", "TEXT")
+        add_col_if_missing(conn, "fixture_boms", "child_part_no", "TEXT")
+        add_col_if_missing(conn, "fixture_boms", "qty", "INTEGER DEFAULT 1")
+        add_col_if_missing(conn, "fixture_boms", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+
+        conn.commit()
+        c.close()
+
+def is_consumable_part(part_no: str) -> bool:
+    return part_no.startswith("939") and part_no not in EXCEPTIONS
+
+def fixture_exists(part_no: str) -> bool:
     with get_conn() as conn:
-        cur = conn.execute("SELECT * FROM fixtures WHERE part_no = ?;", (part_no,))
-        return cur.fetchone()
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
+        ok = c.fetchone() is not None
+        c.close()
+        return ok
 
-def _ensure_stock_row(conn: sqlite3.Connection, fixture_id: int, warehouse: str) -> None:
-    conn.execute("""
-        INSERT OR IGNORE INTO warehouse_stock (fixture_id, warehouse, qty)
-        VALUES (?, ?, 0);
-    """, (fixture_id, warehouse))
-
-def _get_stock_for_update(conn: sqlite3.Connection, fixture_id: int, warehouse: str) -> int:
-    cur = conn.execute("""
-        SELECT qty FROM warehouse_stock WHERE fixture_id = ? AND warehouse = ?;
-    """, (fixture_id, warehouse))
-    row = cur.fetchone()
-    if not row:
-        _ensure_stock_row(conn, fixture_id, warehouse)
-        return 0
-    return int(row["qty"])
-
-def get_stock(part_no: str, warehouse: str) -> int:
-    _validate_part_no(part_no)
+def insert_fixture(part_no: str, name: str = "", spec: str = "", category: str = "", safety_stock: int = 0):
     with get_conn() as conn:
-        cur = conn.execute("""
-            SELECT ws.qty
-            FROM fixtures f
-            JOIN warehouse_stock ws ON ws.fixture_id = f.fixture_id
-            WHERE f.part_no = ? AND ws.warehouse = ?;
-        """, (part_no, warehouse))
-        row = cur.fetchone()
-        return int(row["qty"]) if row else 0
-
-def insert_fixture(part_no: str, name: str, type_: str, spec: str = "", safe_stock: int = 0, created_by: str = "") -> Dict[str, Any]:
-    _validate_part_no(part_no)
-    type_ = (type_ or "").strip().lower()
-    if type_ not in ("fixture", "consumable"):
-        raise ValueError("type 必須為 'fixture' 或 'consumable'。")
-    with get_conn() as conn:
-        cur = conn.execute("SELECT fixture_id FROM fixtures WHERE part_no = ?;", (part_no,))
-        row = cur.fetchone()
-        if row:
-            fixture_id = int(row["fixture_id"])
-            conn.execute("""
-                UPDATE fixtures
-                   SET name = COALESCE(NULLIF(?,''), name),
-                       type = ?,
-                       spec = COALESCE(NULLIF(?,''), spec),
-                       safe_stock = ?
-                 WHERE fixture_id = ?;
-            """, (name, type_, spec, max(0, int(safe_stock)), fixture_id))
-        else:
-            conn.execute("""
-                INSERT INTO fixtures (part_no, name, type, spec, safe_stock)
-                VALUES (?, ?, ?, ?, ?);
-            """, (part_no, name, type_, spec, max(0, int(safe_stock))))
-            fixture_id = conn.execute("SELECT last_insert_rowid() AS id;").fetchone()["id"]
+        c = conn.cursor()
+        c.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
+        if c.fetchone():
+            raise ValueError(f"治具料號 {part_no} 已存在，不可重複建立")
+        c.execute(
+            "INSERT INTO fixtures (part_no, description, spec, category, safety_stock) VALUES (?, ?, ?, ?, ?)",
+            (part_no, name, spec, category, safety_stock),
+        )
         for wh in CORE_WAREHOUSES:
-            _ensure_stock_row(conn, fixture_id, wh)
-        return {"ok": True, "fixture_id": fixture_id, "part_no": part_no}
+            c.execute(
+                "INSERT OR IGNORE INTO warehouse_stock (part_no, warehouse, qty) VALUES (?, ?, 0)",
+                (part_no, wh),
+            )
+        conn.commit()
+        c.close()
 
-def add_stock(part_no: str, qty: int, user: str, remark: str = "") -> Dict[str, Any]:
-    _validate_part_no(part_no)
-    qty = int(qty)
-    if qty <= 0:
-        raise ValueError("入庫數量必須為正整數。")
+def delete_fixture(part_no: str):
     with get_conn() as conn:
-        frow = conn.execute(
-            "SELECT fixture_id FROM fixtures WHERE part_no = ?;",
-            (part_no,)
-        ).fetchone()
-        if not frow:
-            raise ValueError("料號不存在，請先建立料號。")
-        fixture_id = int(frow["fixture_id"])
+        c = conn.cursor()
+        c.execute("DELETE FROM fixtures WHERE part_no=?", (part_no,))
+        c.execute("DELETE FROM warehouse_stock WHERE part_no=?", (part_no,))
+        c.execute("DELETE FROM fixture_boms WHERE parent_part_no=? OR child_part_no=?", (part_no, part_no))
+        conn.commit()
+        c.close()
 
-        _ensure_stock_row(conn, fixture_id, "治具室")
-        conn.execute("""
-            UPDATE warehouse_stock
-               SET qty = qty + ?, updated_at = datetime('now','localtime')
-             WHERE fixture_id = ? AND warehouse = '治具室';
-        """, (qty, fixture_id))
-        conn.execute("""
-            INSERT INTO transfer_logs (fixture_id, action, from_wh, to_wh, qty, user, remark)
-            VALUES (?, 'in', NULL, '治具室', ?, ?, ?);
-        """, (fixture_id, qty, user, remark))
-        return {"ok": True, "fixture_id": fixture_id, "to": "治具室", "delta": qty}
-    
-def transfer_stock(part_no: str, from_wh: str, to_wh: str, qty: int, user: str, remark: str = "") -> Dict[str, Any]:
-    _validate_part_no(part_no)
-    qty = int(qty)
-    from_wh = (from_wh or "").strip()
-    to_wh = (to_wh or "").strip()
+def add_stock(part_no: str, qty: int, warehouse: str):
     if qty <= 0:
-        raise ValueError("轉倉數量必須為正整數。")
+        raise ValueError("入庫數量必須為正整數")
+    with get_conn() as conn:
+        c = conn.cursor()
+        if not fixture_exists(part_no):
+            c.close()
+            raise ValueError(f"治具料號 {part_no} 不存在，請先新增治具")
+
+        c.execute(
+            "UPDATE warehouse_stock SET qty = qty + ? WHERE part_no = ? AND warehouse = ?",
+            (qty, part_no, warehouse),
+        )
+        if c.rowcount == 0:
+            c.execute(
+                "INSERT INTO warehouse_stock (part_no, warehouse, qty) VALUES (?, ?, ?)",
+                (part_no, warehouse, qty),
+            )
+
+        conn.commit()
+        c.close()
+
+def transfer_stock(part_no: str, qty: int, from_wh: str, to_wh: str):
+    if qty <= 0:
+        raise ValueError("調撥數量必須為正整數")
     if from_wh == to_wh:
-        raise ValueError("來源倉與目的倉不可相同。")
-    with get_conn() as conn:
-        frow = conn.execute("SELECT fixture_id FROM fixtures WHERE part_no = ?;", (part_no,)).fetchone()
-        if not frow:
-            raise ValueError("料號不存在，請先建立料號。")
-        fixture_id = int(frow["fixture_id"])
-        src_qty = _get_stock_for_update(conn, fixture_id, from_wh)
-        if src_qty < qty:
-            raise ValueError(f"來源倉「{from_wh}」庫存不足（現有 {src_qty}，欲轉 {qty}）。")
-        _ensure_stock_row(conn, fixture_id, to_wh)
-        conn.execute("""
-            UPDATE warehouse_stock
-               SET qty = qty - ?, updated_at = datetime('now','localtime')
-             WHERE fixture_id = ? AND warehouse = ?;
-        """, (qty, fixture_id, from_wh))
-        conn.execute("""
-            UPDATE warehouse_stock
-               SET qty = qty + ?, updated_at = datetime('now','localtime')
-             WHERE fixture_id = ? AND warehouse = ?;
-        """, (qty, fixture_id, to_wh))
-        conn.execute("""
-            INSERT INTO transfer_logs (fixture_id, action, from_wh, to_wh, qty, user, remark)
-            VALUES (?, 'transfer', ?, ?, ?, ?, ?);
-        """, (fixture_id, from_wh, to_wh, qty, user, remark))
-        return {"ok": True, "fixture_id": fixture_id, "from": from_wh, "to": to_wh, "delta": qty}
+        raise ValueError("來源與目標倉別相同")
 
-
-def consume_stock(part_no: str, qty: int, user: str, line: str, purpose: str, from_wh: str = "上齊", move_to_consumed: bool = True) -> Dict[str, Any]:
-    _validate_part_no(part_no)
-    qty = int(qty)
-    if qty <= 0:
-        raise ValueError("消耗數量必須為正整數。")
     with get_conn() as conn:
-        frow = conn.execute("SELECT fixture_id, type FROM fixtures WHERE part_no = ?;", (part_no,)).fetchone()
-        if not frow:
-            raise ValueError("料號不存在，請先建立料號。")
-        fixture_id = int(frow["fixture_id"])
-        src_qty = _get_stock_for_update(conn, fixture_id, from_wh)
-        if src_qty < qty:
-            raise ValueError(f"來源倉「{from_wh}」庫存不足（現有 {src_qty}，欲消耗 {qty}）。")
-        conn.execute("""
-            UPDATE warehouse_stock
-               SET qty = qty - ?, updated_at = datetime('now','localtime')
-             WHERE fixture_id = ? AND warehouse = ?;
-        """, (qty, fixture_id, from_wh))
-        conn.execute("""
-            INSERT INTO consumption_logs (fixture_id, qty, user, line, purpose)
-            VALUES (?, ?, ?, ?, ?);
-        """, (fixture_id, qty, user, line, purpose))
-        if move_to_consumed:
-            _ensure_stock_row(conn, fixture_id, CONSUMED_WAREHOUSE)
-            conn.execute("""
-                UPDATE warehouse_stock
-                   SET qty = qty + ?, updated_at = datetime('now','localtime')
-                 WHERE fixture_id = ? AND warehouse = ?;
-            """, (qty, fixture_id, CONSUMED_WAREHOUSE))
-            conn.execute("""
-                INSERT INTO transfer_logs (fixture_id, action, from_wh, to_wh, qty, user, remark)
-                VALUES (?, 'transfer', ?, ?, ?, ?, 'consumption-auto');
-            """, (fixture_id, from_wh, CONSUMED_WAREHOUSE, qty, user))
-        return {"ok": True, "fixture_id": fixture_id, "from": from_wh, "to": CONSUMED_WAREHOUSE if move_to_consumed else None, "consumed": qty, "user": user, "line": line, "purpose": purpose}
+        c = conn.cursor()
+        if not fixture_exists(part_no):
+            c.close()
+            raise ValueError(f"治具料號 {part_no} 不存在，請先新增治具")
 
-def get_overview_by_warehouse(part_no: Optional[str] = None) -> Tuple[list[Dict[str, Any]], list[str]]:
+        c.execute("SELECT qty FROM warehouse_stock WHERE part_no=? AND warehouse=?", (part_no, from_wh))
+        row = c.fetchone()
+        if not row or row[0] < qty:
+            c.close()
+            raise ValueError("來源倉庫數量不足")
+
+        c.execute(
+            "INSERT OR IGNORE INTO warehouse_stock (part_no, warehouse, qty) VALUES (?, ?, 0)",
+            (part_no, to_wh),
+        )
+
+        c.execute("UPDATE warehouse_stock SET qty = qty - ? WHERE part_no = ? AND warehouse = ?", (qty, part_no, from_wh))
+        c.execute("UPDATE warehouse_stock SET qty = qty + ? WHERE part_no = ? AND warehouse = ?", (qty, part_no, to_wh))
+
+        c.execute(
+            "INSERT INTO transfer_logs (part_no, from_warehouse, to_warehouse, qty) VALUES (?, ?, ?, ?)",
+            (part_no, from_wh, to_wh, qty),
+        )
+
+        conn.commit()
+        c.close()
+
+def get_overview_by_warehouse(warehouse: str):
     with get_conn() as conn:
-        whs = CORE_WAREHOUSES + [CONSUMED_WAREHOUSE]
-        wh_selects = ", ".join([
-            f"COALESCE(MAX(CASE WHEN ws.warehouse='{wh}' THEN ws.qty END),0) AS '{wh}'"
-            for wh in whs
-        ])
-        if part_no:
-            _validate_part_no(part_no)
-            cur = conn.execute(f"""
-                SELECT f.part_no, f.name, f.type, {wh_selects}
-                FROM fixtures f
-                LEFT JOIN warehouse_stock ws ON ws.fixture_id = f.fixture_id
-                WHERE f.part_no = ?
-                GROUP BY f.fixture_id
-                ORDER BY f.part_no;
-            """, (part_no,))
-        else:
-            cur = conn.execute(f"""
-                SELECT f.part_no, f.name, f.type, {wh_selects}
-                FROM fixtures f
-                LEFT JOIN warehouse_stock ws ON ws.fixture_id = f.fixture_id
-                GROUP BY f.fixture_id
-                ORDER BY f.part_no;
-            """)
-        rows = [dict(r) for r in cur.fetchall()]
-        return rows, whs
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT f.part_no, f.description, IFNULL(f.spec,''), IFNULL(f.category,''), f.safety_stock, IFNULL(w.qty, 0)
+            FROM fixtures f
+            LEFT JOIN warehouse_stock w
+            ON f.part_no = w.part_no AND w.warehouse = ?
+        """,
+            (warehouse,),
+        )
+        rows = c.fetchall()
+        c.close()
+        return rows
+
+def get_bom_by_part(part_no: str):
+    with get_conn() as conn:
+        c = conn.cursor()
+        c.execute("SELECT id, child_part_no, qty, created_at FROM fixture_boms WHERE parent_part_no=?", (part_no,))
+        rows = c.fetchall()
+        c.close()
+        return rows
+
+def add_bom_item(parent_part_no: str, child_part_no: str, qty: int = 1):
+    with get_conn() as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO fixture_boms (parent_part_no, child_part_no, qty) VALUES (?, ?, ?)", (parent_part_no, child_part_no, qty))
+        conn.commit()
+        c.close()
+
+def delete_bom_item(bom_id: int):
+    with get_conn() as conn:
+        c = conn.cursor()
+        c.execute("DELETE FROM fixture_boms WHERE id=?", (bom_id,))
+        conn.commit()
+        c.close()
+def ensure_stock_consistency():
+    """確保每個料號在所有倉別都有一筆庫存紀錄 (qty 預設 0)。"""
+    with get_conn() as conn:
+        c = conn.cursor()
+        for wh in CORE_WAREHOUSES:
+            c.execute("""
+                INSERT OR IGNORE INTO warehouse_stock (part_no, warehouse, qty)
+                SELECT part_no, ?, 0 FROM fixtures
+            """, (wh,))
+        conn.commit()
+        c.close()

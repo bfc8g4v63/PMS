@@ -11,17 +11,25 @@ import shutil
 import atexit
 import time
 import math
+import fixture_helper as FH
 
 from utils import log_activity
-from schema_helper import auto_add_missing_columns, get_required_columns
-from schema_helper import ensure_changelog_schema
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 from changelog_tab import build_changelog_tab
-from schema_helper import ensure_changelog_table_exists
-from fixture_tabs import build_fixture_tab, build_fixture_bom_tab
+
+from schema_helper import (
+    get_required_columns,
+    auto_add_missing_columns,
+    ensure_changelog_schema,
+    ensure_fixture_schema,
+    print_tables_info,
+)
+
+from fixture_tabs import build_fixture_tab
+from fixture_bom_tab import build_fixture_bom_tab
 from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
 
 if USE_LOCAL_DB:
@@ -30,13 +38,15 @@ elif os.path.exists(Z_DRIVE_DB):
     DB_NAME = Z_DRIVE_DB
 else:
     DB_NAME = UNC_DB
-import fixture_helper as FH
+
 FH.set_db_path(DB_NAME)
-FH.ensure_schemas()
-ensure_changelog_table_exists(DB_NAME)
+ensure_fixture_schema(DB_NAME)
+auto_add_missing_columns(DB_NAME, get_required_columns())
+ensure_changelog_schema(DB_NAME)
+FH.ensure_stock_consistency() 
+print_tables_info(DB_NAME)
 
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
-
 print(f"使用資料庫：{DB_NAME}")
 
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
