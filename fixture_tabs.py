@@ -41,7 +41,7 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         total_label.pack(side="right", padx=8, pady=4)
         total_labels[wh] = total_label
 
-        columns = ("part_no", "name", "spec", "category", "qty")
+        columns = ("part_no", "name", "spec", "category", "safety_stock", "qty")
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         trees[wh] = tree
 
@@ -49,12 +49,14 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         tree.heading("name", text="治具品名")
         tree.heading("spec", text="治具規格")
         tree.heading("category", text="治具類群")
+        tree.heading("safety_stock", text="安庫")
         tree.heading("qty", text="數量")
 
         tree.column("part_no", width=20, anchor="center")
         tree.column("name", width=350, anchor="center")
         tree.column("spec", width=350, anchor="center")
         tree.column("category", width=20, anchor="center")
+        tree.column("safety_stock", width=20, anchor="center")
         tree.column("qty", width=20, anchor="center")
 
         tree.pack(fill="both", expand=True)
@@ -221,7 +223,7 @@ def refresh_fixture_tree(tree, warehouse, total_label=None):
 
     total = 0
     for part_no, name, spec, category, safety_stock, qty in rows:
-        tree.insert("", "end", values=(part_no, name, spec, category, qty))
+        tree.insert("", "end", values=(part_no, name, spec, category, safety_stock, qty))
         try:
             total += int(qty) if qty is not None else 0
         except:
