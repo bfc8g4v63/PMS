@@ -11,7 +11,9 @@ import shutil
 import atexit
 import time
 import math
+import tkinter.font as tkFont
 import fixture_helper as FH
+
 
 from utils import log_activity
 from account_management_tab import build_user_management_tab
@@ -19,15 +21,17 @@ from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 from changelog_tab import build_changelog_tab
-
+from config import ENABLE_AUTO_LOGOUT, IDLE_TIMEOUT
 from schema_helper import (
     get_required_columns,
     auto_add_missing_columns,
     ensure_changelog_schema,
     ensure_fixture_schema,
     print_tables_info,
+
 )
 
+from config import VERBOSE_SCHEMA_CHECK
 from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
@@ -41,10 +45,16 @@ else:
 
 FH.set_db_path(DB_NAME)
 ensure_fixture_schema(DB_NAME)
-auto_add_missing_columns(DB_NAME, get_required_columns())
-ensure_changelog_schema(DB_NAME)
-FH.ensure_stock_consistency() 
-print_tables_info(DB_NAME)
+
+if VERBOSE_SCHEMA_CHECK:
+    auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=True)
+    ensure_changelog_schema(DB_NAME, verbose=True)
+    FH.ensure_stock_consistency()
+    print_tables_info(DB_NAME)
+else:
+    auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=False)
+    ensure_changelog_schema(DB_NAME, verbose=False)
+    FH.ensure_stock_consistency()
 
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 print(f"使用資料庫：{DB_NAME}")
@@ -915,11 +925,13 @@ if __name__ == "__main__":
         root = tk.Tk()
         root.title("生產管理平台")
         root.geometry("1200x750")
-        
-        IDLE_TIMEOUT_MS = 3 * 60 * 1000
-        WARNING_TIMEOUT_MS = 2 * 60 * 1000
+
+        WARNING_TIMEOUT_MS = (IDLE_TIMEOUT - 60) * 1000
+        IDLE_TIMEOUT_MS = IDLE_TIMEOUT * 1000
 
         def reset_idle_timer(event=None):
+            if not ENABLE_AUTO_LOGOUT:
+                return
             if hasattr(root, "_idle_after_id"):
                 root.after_cancel(root._idle_after_id)
             if hasattr(root, "_warning_after_id"):
@@ -930,31 +942,29 @@ if __name__ == "__main__":
 
         def on_idle_warning():
             try:
-                messagebox.showwarning("閒置警告", "您已閒置 2 分鐘，若再 1 分鐘未操作將自動登出。")
+                messagebox.showwarning("閒置警告", f"您已閒置 {IDLE_TIMEOUT-60} 秒，若再 60 秒未操作將自動登出。")
             except:
                 pass
 
         def on_idle_timeout():
-
             try:
                 toplevel = tk.Toplevel(root)
                 toplevel.title("自動登出")
-                tk.Label(toplevel, text="您已閒置超過 3 分鐘，系統將自動登出").pack(padx=20, pady=20)
+                tk.Label(toplevel, text=f"您已閒置超過 {IDLE_TIMEOUT//60} 分鐘，系統將自動登出").pack(padx=20, pady=20)
                 toplevel.after(2000, lambda: logout_and_exit(root))
             except:
                 logout_and_exit(root)
 
-        for event_type in ["<Motion>", "<Key>", "<Button>"]:
-            root.bind_all(event_type, reset_idle_timer)
-
-        reset_idle_timer()
+        if ENABLE_AUTO_LOGOUT:
+            for event_type in ["<Motion>", "<Key>", "<Button>"]:
+                root.bind_all(event_type, reset_idle_timer)
+            reset_idle_timer()
 
         try:
             root.iconbitmap("PMS.ico")
         except:
             pass
 
-        import tkinter.font as tkFont
         default_font = tkFont.nametofont("TkDefaultFont")
         default_font.configure(size=10, family="Microsoft Calibri")
 

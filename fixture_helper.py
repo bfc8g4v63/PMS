@@ -1,4 +1,4 @@
-import sqlite3
+import sqlite3 
 from datetime import datetime
 import os
 
@@ -51,6 +51,7 @@ def ensure_schemas():
             description TEXT,
             spec TEXT,
             category TEXT,
+            unit_price REAL DEFAULT 0,
             safety_stock INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -58,6 +59,7 @@ def ensure_schemas():
         add_col_if_missing(conn, "fixtures", "description", "TEXT")
         add_col_if_missing(conn, "fixtures", "spec", "TEXT")
         add_col_if_missing(conn, "fixtures", "category", "TEXT")
+        add_col_if_missing(conn, "fixtures", "unit_price", "REAL DEFAULT 0")
         add_col_if_missing(conn, "fixtures", "safety_stock", "INTEGER DEFAULT 0")
         add_col_if_missing(conn, "fixtures", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
@@ -113,15 +115,15 @@ def fixture_exists(part_no: str) -> bool:
         c.close()
         return ok
 
-def insert_fixture(part_no: str, name: str = "", spec: str = "", category: str = "", safety_stock: int = 0):
+def insert_fixture(part_no: str, name: str = "", spec: str = "", category: str = "", unit_price: float = 0.0, safety_stock: int = 0):
     with get_conn() as conn:
         c = conn.cursor()
         c.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
         if c.fetchone():
             raise ValueError(f"治具料號 {part_no} 已存在，不可重複建立")
         c.execute(
-            "INSERT INTO fixtures (part_no, description, spec, category, safety_stock) VALUES (?, ?, ?, ?, ?)",
-            (part_no, name, spec, category, safety_stock),
+            "INSERT INTO fixtures (part_no, description, spec, category, unit_price, safety_stock) VALUES (?, ?, ?, ?, ?, ?)",
+            (part_no, name, spec, category, unit_price, safety_stock),
         )
         for wh in CORE_WAREHOUSES:
             c.execute(
@@ -201,7 +203,8 @@ def get_overview_by_warehouse(warehouse: str):
         c = conn.cursor()
         c.execute(
             """
-            SELECT f.part_no, f.description, IFNULL(f.spec,''), IFNULL(f.category,''), f.safety_stock, IFNULL(w.qty, 0)
+            SELECT f.part_no, f.description, IFNULL(f.spec,''), IFNULL(f.category,''), 
+                   f.unit_price, f.safety_stock, IFNULL(w.qty, 0)
             FROM fixtures f
             LEFT JOIN warehouse_stock w
             ON f.part_no = w.part_no AND w.warehouse = ?
@@ -233,6 +236,7 @@ def delete_bom_item(bom_id: int):
         c.execute("DELETE FROM fixture_boms WHERE id=?", (bom_id,))
         conn.commit()
         c.close()
+
 def ensure_stock_consistency():
     """確保每個料號在所有倉別都有一筆庫存紀錄 (qty 預設 0)。"""
     with get_conn() as conn:

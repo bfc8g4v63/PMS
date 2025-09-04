@@ -29,29 +29,33 @@ def get_required_columns():
         }
     }
 
-def auto_add_missing_columns(db_path, schema_map):
+def auto_add_missing_columns(db_path, schema_map, verbose=False):
     with sqlite3.connect(db_path, timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
         cursor = conn.cursor()
         for table, columns in schema_map.items():
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
             if not cursor.fetchone():
-                print(f"[警告] 資料表不存在：{table}，無法補欄位")
+                if verbose:
+                    print(f"[警告] 資料表不存在：{table}，無法補欄位")
                 continue
 
             cursor.execute(f"PRAGMA table_info({table})")
             existing = [row[1] for row in cursor.fetchall()]
-            print(f"資料表 {table} 現有欄位: {existing}")
+            if verbose:
+                print(f"資料表 {table} 現有欄位: {existing}")
 
             for col_name, col_type in columns.items():
                 if col_name not in existing:
                     try:
                         cursor.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
-                        print(f"已新增欄位 {col_name} 到資料表 {table}")
+                        if verbose:
+                            print(f"已新增欄位 {col_name} 到資料表 {table}")
                     except sqlite3.OperationalError as e:
-                        print(f"欄位新增失敗 {col_name}@{table}: {e}")
+                        if verbose:
+                            print(f"欄位新增失敗 {col_name}@{table}: {e}")
 
-def ensure_changelog_schema(db_name):
+def ensure_changelog_schema(db_name, verbose=False):
     with sqlite3.connect(db_name) as conn:
         cursor = conn.cursor()
         cursor.execute("""
@@ -63,6 +67,10 @@ def ensure_changelog_schema(db_name):
             )
         """)
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_changelog_version ON changelog(version);")
+        if verbose:
+            cursor.execute("PRAGMA table_info(changelog)")
+            cols = [row[1] for row in cursor.fetchall()]
+            print("資料表 changelog 現有欄位:", cols)
         conn.commit()
 
 def get_next_changelog_version(db_path):
