@@ -7,16 +7,19 @@ from fixture_helper import (
     add_stock,
     transfer_stock,
     get_overview_by_warehouse,
+    update_safety_stock,
     CORE_WAREHOUSES
 )
 
+EXCHANGE_RATE = 30.375
+
 CATEGORIES = [
-    "電腦/設備類",
+    "電腦設備類",
     "載具類",
     "治具類",
-    "裸板類",
+    "板子類",
     "主機類",
-    "測具/板子類",
+    "其它類",
     "線材類",
     "卡片類",
     "電供類",
@@ -51,30 +54,36 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
     combo_cat = ttk.Combobox(control_frame, values=CATEGORIES, state="readonly")
     combo_cat.grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
-    ttk.Label(control_frame, text="治具單價:").grid(row=4, column=0, padx=5, pady=5, sticky="w")
+    ttk.Label(control_frame, text="治具單價 (USD):").grid(row=4, column=0, padx=5, pady=5, sticky="w")
     entry_price = ttk.Entry(control_frame)
     entry_price.grid(row=4, column=1, padx=5, pady=5, sticky="w")
 
-    ttk.Label(control_frame, text="入庫倉別:").grid(row=5, column=0, padx=5, pady=5, sticky="w")
-    combo_wh = ttk.Combobox(control_frame, values=CORE_WAREHOUSES, state="readonly")
-    combo_wh.grid(row=5, column=1, padx=5, pady=5, sticky="w")
-    combo_wh.current(0)
+    ttk.Label(control_frame, text="安庫量:").grid(row=5, column=0, padx=5, pady=5, sticky="w")
+    entry_safety_stock = ttk.Entry(control_frame)
+    entry_safety_stock.grid(row=5, column=1, padx=5, pady=5, sticky="w")
 
-    ttk.Label(control_frame, text="入庫在庫量:").grid(row=6, column=0, padx=5, pady=5, sticky="w")
+    ttk.Label(control_frame, text="入庫量:").grid(row=6, column=0, padx=5, pady=5, sticky="w")
     entry_qty = ttk.Entry(control_frame)
     entry_qty.grid(row=6, column=1, padx=5, pady=5, sticky="w")
 
+    ttk.Label(control_frame, text="入庫倉別:").grid(row=7, column=0, padx=5, pady=5, sticky="w")
+    combo_wh = ttk.Combobox(control_frame, values=CORE_WAREHOUSES, state="readonly")
+    combo_wh.grid(row=7, column=1, padx=5, pady=5, sticky="w")
+    combo_wh.current(0)
+        
     def on_add_fixture():
         part = entry_part.get().strip()
         name = entry_name.get().strip()
         spec = entry_spec.get().strip()
         cat = combo_cat.get().strip()
         price = entry_price.get().strip()
+        safety = entry_safety_stock.get().strip()
+
         if not (part.isdigit() and len(part) in (8, 12)):
             messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
             return
-        if not name or not spec or not cat or not price:
-            messagebox.showerror("錯誤", "治具品名、治具規格、治具類群、治具單價不可為空")
+        if not name or not spec or not cat or not price or not safety:
+            messagebox.showerror("錯誤", "治具品名、規格、類群、單價、安庫量不可為空")
             return
         try:
             price_val = round(float(price), 3)
@@ -82,7 +91,13 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
             messagebox.showerror("錯誤", "治具單價必須是數字 (可小數三位)")
             return
         try:
-            insert_fixture(part, name, spec, cat, price_val, 0)
+            safety_val = int(safety)
+        except:
+            messagebox.showerror("錯誤", "安庫量必須是整數")
+            return
+
+        try:
+            insert_fixture(part, name, spec, cat, price_val, safety_val)
             messagebox.showinfo("完成", f"已新增治具料號 {part}")
             for wh in CORE_WAREHOUSES:
                 refresh_fixture_tree(trees[wh], wh, total_labels[wh], total_price_labels[wh])
@@ -100,6 +115,25 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         try:
             delete_fixture(part)
             messagebox.showinfo("完成", f"已刪除治具料號 {part}")
+            for wh in CORE_WAREHOUSES:
+                refresh_fixture_tree(trees[wh], wh, total_labels[wh], total_price_labels[wh])
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
+
+    def on_update_safety():
+        part = entry_part.get().strip()
+        safety = entry_safety_stock.get().strip()
+        if not (part.isdigit() and len(part) in (8, 12)):
+            messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
+            return
+        try:
+            safety_val = int(safety)
+        except:
+            messagebox.showerror("錯誤", "安庫量必須是整數")
+            return
+        try:
+            update_safety_stock(part, safety_val)
+            messagebox.showinfo("完成", f"{part} 的安庫量已更新為 {safety_val}")
             for wh in CORE_WAREHOUSES:
                 refresh_fixture_tree(trees[wh], wh, total_labels[wh], total_price_labels[wh])
         except Exception as e:
@@ -140,7 +174,7 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         try:
             qty = int(entry_transfer_qty.get().strip())
         except ValueError:
-            messagebox.showerror("錯誤", "在庫量必須是整數")
+            messagebox.showerror("錯誤", "調撥量必須是整數")
             return
         if not (part.isdigit() and len(part) in (8, 12)):
             messagebox.showerror("錯誤", "治具料號必須為 8 或 12 碼數字")
@@ -158,7 +192,6 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
                 refresh_fixture_tree(trees[wh2], wh2, total_labels[wh2], total_price_labels[wh2])
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
-
     def on_export_excel():
         file_path = filedialog.asksaveasfilename(
             defaultextension=".xlsx",
@@ -172,9 +205,9 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         ws = wb.active
         ws.title = "治具存量"
 
-        headers = ["治具料號", "治具品名", "治具規格", "治具類群", "單價", "安庫量"]
+        headers = ["治具料號", "治具品名", "治具規格", "治具類群", "單價 USD", "單價 NTD", "安庫量"]
         headers += CORE_WAREHOUSES
-        headers += ["總在庫量", "缺少數量", "總價"]
+        headers += ["總在庫量", "缺少數量", "總價 NTD"]
         ws.append(headers)
 
         all_data = {}
@@ -195,8 +228,9 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         total_purchase_cost = 0.0
         for part_no, data in all_data.items():
             total_qty = sum(data["warehouses"].values())
+            unit_price_ntd = round(data["unit_price"] * EXCHANGE_RATE, 3)
             shortage = max(data["safety_stock"] - total_qty, 0)
-            shortage_cost = round(shortage * data["unit_price"], 3)
+            shortage_cost = round(shortage * unit_price_ntd, 3)
             total_purchase_cost += shortage_cost
             row = [
                 part_no,
@@ -204,6 +238,7 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
                 data["spec"],
                 data["category"],
                 data["unit_price"],
+                unit_price_ntd,
                 data["safety_stock"],
             ]
             row += [data["warehouses"][wh] for wh in CORE_WAREHOUSES]
@@ -211,48 +246,19 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
             ws.append(row)
 
         ws.append([])
-        ws.append(["預估採購總價", "", "", "", "", "", "", "", "", "", "", "", "", "", "", round(total_purchase_cost, 3)])
-
-        for col in ws.columns:
-            max_length = 0
-            col_letter = col[0].column_letter
-            for cell in col:
-                try:
-                    if cell.value:
-                        max_length = max(max_length, len(str(cell.value)))
-                except:
-                    pass
-            ws.column_dimensions[col_letter].width = max_length + 2
-
-        from openpyxl.styles import numbers
-
-        price_cols = ["E", f"{ws.max_column}"]
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-            for col in price_cols:
-                if col in ws and row[ws[col+"1"].column-1].value is not None:
-                    ws[col+str(row[0].row)].number_format = "#,##0.000"
-
-        qty_cols = []
-        for idx, header in enumerate(headers, start=1):
-            if "量" in header:
-                qty_cols.append(idx)
-
-        for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
-            for col_idx in qty_cols:
-                cell = row[col_idx-1]
-                if isinstance(cell.value, (int, float)):
-                    cell.number_format = "#,##0"
+        ws.append(["預估採購總價 (NTD)", "", "", "", "", "", "", "", "", "", "", "", "", "", "", round(total_purchase_cost, 3)])
 
         wb.save(file_path)
         messagebox.showinfo("完成", f"已匯出 Excel：\n{file_path}")
 
     ttk.Button(control_frame, text="新增治具", command=on_add_fixture).grid(row=0, column=2, padx=5, pady=5)
     ttk.Button(control_frame, text="刪除治具", command=on_delete_fixture).grid(row=0, column=3, padx=5, pady=5)
+    ttk.Button(control_frame, text="⚙ 修改安庫", command=on_update_safety).grid(row=5, column=2, padx=5, pady=5)
     ttk.Button(control_frame, text="⏫ 入庫", command=on_add_stock).grid(row=6, column=2, padx=5, pady=5)
-    ttk.Button(control_frame, text="📤 匯出 Excel", command=on_export_excel).grid(row=8, column=0, padx=5, pady=5, sticky="w")
+    ttk.Button(control_frame, text="📤 匯出 Excel", command=on_export_excel).grid(row=9, column=0, padx=5, pady=5, sticky="w")
 
     transfer_frame = ttk.LabelFrame(control_frame, text="調撥")
-    transfer_frame.grid(row=7, column=0, columnspan=4, pady=10, sticky="ew")
+    transfer_frame.grid(row=8, column=0, columnspan=4, pady=10, sticky="ew")
 
     ttk.Label(transfer_frame, text="來源倉別:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
     combo_from = ttk.Combobox(transfer_frame, values=CORE_WAREHOUSES, state="readonly")
@@ -262,7 +268,7 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
     combo_to = ttk.Combobox(transfer_frame, values=CORE_WAREHOUSES, state="readonly")
     combo_to.grid(row=0, column=3, padx=5, pady=5, sticky="w")
 
-    ttk.Label(transfer_frame, text="在庫量:").grid(row=0, column=4, padx=5, pady=5, sticky="w")
+    ttk.Label(transfer_frame, text="調撥量:").grid(row=0, column=4, padx=5, pady=5, sticky="w")
     entry_transfer_qty = ttk.Entry(transfer_frame, width=8)
     entry_transfer_qty.grid(row=0, column=5, padx=5, pady=5, sticky="w")
 
@@ -279,11 +285,11 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         total_label.pack(side="right", padx=8, pady=4)
         total_labels[wh] = total_label
 
-        total_price_label = ttk.Label(topbar, text="倉別總價: 0 USD")
+        total_price_label = ttk.Label(topbar, text="倉別總價: 0 NTD")
         total_price_label.pack(side="right", padx=8, pady=4)
         total_price_labels[wh] = total_price_label
 
-        columns = ("part_no", "name", "spec", "category", "unit_price", "total_price", "safety_stock", "qty")
+        columns = ("part_no", "name", "spec", "category", "unit_price_usd", "unit_price_ntd", "total_price_ntd", "safety_stock", "qty")
         tree = ttk.Treeview(frame, columns=columns, show="headings")
         trees[wh] = tree
 
@@ -291,19 +297,21 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
         tree.heading("name", text="治具品名")
         tree.heading("spec", text="治具規格")
         tree.heading("category", text="治具類群")
-        tree.heading("unit_price", text="單價 USD")
-        tree.heading("total_price", text="總價 USD")
+        tree.heading("unit_price_usd", text="單價 USD")
+        tree.heading("unit_price_ntd", text="單價 NTD")
+        tree.heading("total_price_ntd", text="總價 NTD")
         tree.heading("safety_stock", text="安庫量")
         tree.heading("qty", text="在庫量")
 
-        tree.column("part_no", width=30, anchor="center")
+        tree.column("part_no", width=70, anchor="center")
         tree.column("name", width=300, anchor="center")
         tree.column("spec", width=300, anchor="center")
-        tree.column("category", width=30, anchor="center")
-        tree.column("unit_price", width=30, anchor="center")
-        tree.column("total_price", width=30, anchor="center")
-        tree.column("safety_stock", width=30, anchor="center")
-        tree.column("qty", width=30, anchor="center")
+        tree.column("category", width=50, anchor="center")
+        tree.column("unit_price_usd", width=50, anchor="center")
+        tree.column("unit_price_ntd", width=50, anchor="center")
+        tree.column("total_price_ntd", width=50, anchor="center")
+        tree.column("safety_stock", width=50, anchor="center")
+        tree.column("qty", width=50, anchor="center")
 
         tree.pack(fill="both", expand=True)
 
@@ -323,6 +331,8 @@ def build_fixture_tab(parent, current_user: str = None, db_name: str = None):
             combo_cat.set(vals[3])
             entry_price.delete(0, tk.END)
             entry_price.insert(0, vals[4])
+            entry_safety_stock.delete(0, tk.END)
+            entry_safety_stock.insert(0, vals[7])
             combo_from.set(wh)
             combo_wh.set(wh)
 
@@ -337,12 +347,13 @@ def refresh_fixture_tree(tree, warehouse, total_label=None, total_price_label=No
     for part_no, name, spec, category, unit_price, safety_stock, qty in rows:
         unit_price = unit_price or 0
         qty = qty or 0
-        total_price_item = round(unit_price * qty, 3)
-        tree.insert("", "end", values=(part_no, name, spec, category, unit_price, total_price_item, safety_stock, qty))
+        unit_price_ntd = round(unit_price * EXCHANGE_RATE, 3)
+        total_price_item = round(unit_price_ntd * qty, 3)
+        tree.insert("", "end", values=(part_no, name, spec, category, unit_price, unit_price_ntd, total_price_item, safety_stock, qty))
         total_qty += qty
         total_price += total_price_item
 
     if total_label is not None:
         total_label.config(text=f"合計在庫量: {total_qty}")
     if total_price_label is not None:
-        total_price_label.config(text=f"倉別總價: {round(total_price, 3)} USD")
+        total_price_label.config(text=f"倉別總價: {round(total_price, 3)} NTD")

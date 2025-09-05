@@ -1,4 +1,3 @@
-# schema_helper.py
 import sqlite3
 import re
 
@@ -114,7 +113,6 @@ def add_col_if_missing(conn, table: str, col: str, col_type: str):
     cur.close()
 
 def ensure_fixture_schema(db_path: str):
-    """建立/補齊：fixtures, warehouse_stock, transfer_logs, fixture_boms"""
     with sqlite3.connect(db_path, timeout=10) as conn:
         conn.execute("PRAGMA journal_mode=WAL;")
         cur = conn.cursor()
@@ -126,6 +124,7 @@ def ensure_fixture_schema(db_path: str):
                 description TEXT,
                 spec TEXT,
                 category TEXT,
+                unit_price REAL DEFAULT 0,
                 safety_stock INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
@@ -133,6 +132,7 @@ def ensure_fixture_schema(db_path: str):
         add_col_if_missing(conn, "fixtures", "description", "TEXT")
         add_col_if_missing(conn, "fixtures", "spec", "TEXT")
         add_col_if_missing(conn, "fixtures", "category", "TEXT")
+        add_col_if_missing(conn, "fixtures", "unit_price", "REAL DEFAULT 0")
         add_col_if_missing(conn, "fixtures", "safety_stock", "INTEGER DEFAULT 0")
         add_col_if_missing(conn, "fixtures", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
@@ -159,19 +159,27 @@ def ensure_fixture_schema(db_path: str):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        add_col_if_missing(conn, "transfer_logs", "part_no", "TEXT")
+        add_col_if_missing(conn, "transfer_logs", "from_warehouse", "TEXT")
+        add_col_if_missing(conn, "transfer_logs", "to_warehouse", "TEXT")
+        add_col_if_missing(conn, "transfer_logs", "qty", "INTEGER")
+        add_col_if_missing(conn, "transfer_logs", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
+        # fixture_boms
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fixture_boms (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 parent_part_no TEXT,
                 child_part_no TEXT,
                 qty INTEGER DEFAULT 1,
+                remark TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         add_col_if_missing(conn, "fixture_boms", "parent_part_no", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "child_part_no", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "qty", "INTEGER DEFAULT 1")
+        add_col_if_missing(conn, "fixture_boms", "remark", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
 
         conn.commit()

@@ -1,10 +1,10 @@
 # config.py
 import os
 
-USE_LOCAL_DB = True  # True: 本地測試, False: 寫入 Main Server
+USE_LOCAL_DB = False  # True: 本地測試, False: 寫入 Main Server
 ENABLE_AUTO_LOGOUT = False   # True=啟用閒置登出, False=停用
 IDLE_TIMEOUT = 180
-VERBOSE_SCHEMA_CHECK = False  # True=啟用資料庫欄位檢查, False=停用
+VERBOSE_SCHEMA_CHECK = True  # True=啟用資料庫欄位檢查, False=停用
 
 BASE_LOCAL_PATH = r"C:\Nelson\Dev\GitHub\PMS"
 BASE_NETWORK_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台"

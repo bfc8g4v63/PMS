@@ -1,4 +1,4 @@
-import sqlite3 
+import sqlite3
 from datetime import datetime
 import os
 
@@ -115,7 +115,9 @@ def fixture_exists(part_no: str) -> bool:
         c.close()
         return ok
 
-def insert_fixture(part_no: str, name: str = "", spec: str = "", category: str = "", unit_price: float = 0.0, safety_stock: int = 0):
+
+def insert_fixture(part_no: str, name: str = "", spec: str = "", category: str = "",
+                   unit_price: float = 0.0, safety_stock: int = 0):
     with get_conn() as conn:
         c = conn.cursor()
         c.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
@@ -198,17 +200,27 @@ def transfer_stock(part_no: str, qty: int, from_wh: str, to_wh: str):
         conn.commit()
         c.close()
 
+def update_safety_stock(part_no: str, safety_stock: int):
+    with get_conn() as conn:
+        c = conn.cursor()
+        c.execute("UPDATE fixtures SET safety_stock=? WHERE part_no=?", (safety_stock, part_no))
+        if c.rowcount == 0:
+            raise ValueError(f"治具料號 {part_no} 不存在")
+        conn.commit()
+        c.close()
+
+
 def get_overview_by_warehouse(warehouse: str):
     with get_conn() as conn:
         c = conn.cursor()
         c.execute(
             """
-            SELECT f.part_no, f.description, IFNULL(f.spec,''), IFNULL(f.category,''), 
-                   f.unit_price, f.safety_stock, IFNULL(w.qty, 0)
+            SELECT f.part_no, f.description, IFNULL(f.spec,''), IFNULL(f.category,''),
+                   IFNULL(f.unit_price,0), f.safety_stock, IFNULL(w.qty, 0)
             FROM fixtures f
             LEFT JOIN warehouse_stock w
             ON f.part_no = w.part_no AND w.warehouse = ?
-        """,
+            """,
             (warehouse,),
         )
         rows = c.fetchall()
@@ -226,7 +238,8 @@ def get_bom_by_part(part_no: str):
 def add_bom_item(parent_part_no: str, child_part_no: str, qty: int = 1):
     with get_conn() as conn:
         c = conn.cursor()
-        c.execute("INSERT INTO fixture_boms (parent_part_no, child_part_no, qty) VALUES (?, ?, ?)", (parent_part_no, child_part_no, qty))
+        c.execute("INSERT INTO fixture_boms (parent_part_no, child_part_no, qty) VALUES (?, ?, ?)",
+                  (parent_part_no, child_part_no, qty))
         conn.commit()
         c.close()
 
