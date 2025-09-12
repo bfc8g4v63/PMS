@@ -1,4 +1,5 @@
-import sqlite3
+#$ utils.py
+#% 共用工具、輔助函式
 import os
 import subprocess
 import sys
@@ -6,6 +7,8 @@ from tkinter import messagebox
 from datetime import datetime
 import threading
 import functools
+import fixture_helper as FH  # 統一由 FH.get_conn() 取得連線
+
 
 def open_file(filepath):
     try:
@@ -23,26 +26,29 @@ ACTION_MAP = {
     "update_user": "修改使用者",
     "delete_user": "刪除使用者",
     "upload": "新增 SOP",
+    "update_sop": "更新 SOP",
     "generate_sop": "生成 SOP",
     "apply_sop": "套用 SOP",
     "delete": "刪除紀錄",
     "login": "登入系統",
     "logout": "登出系統",
     "change_password": "變更密碼",
-    "更新SOP": "更新 SOP",
+    "toggle_bypass": "啟用/停用 SOP"
 }
 
-def log_activity(db_name, user, action, filename, module=None):
-    action_display = ACTION_MAP.get(action, action)
-    with sqlite3.connect(db_name, timeout=10) as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
+def log_activity(user, action, filename, module=None):
+    """統一記錄操作日誌：採用 FH.get_conn，無額外 checkpoint。"""
+    action = ACTION_MAP.get(action, action)
+    with FH.get_conn() as conn:
         cursor = conn.cursor()
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO activity_logs (username, action, filename, timestamp, module)
             VALUES (?, ?, ?, ?, ?)
-        """, (user, action, filename, datetime.now().strftime("%Y%m%dT%H%M%S"), module))
+            """,
+            (user, action, filename, datetime.now().strftime("%Y%m%dT%H%M%S"), module),
+        )
         conn.commit()
-        conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
 def safe_button_action(func):
     @functools.wraps(func)
@@ -50,6 +56,7 @@ def safe_button_action(func):
         widget = kwargs.get('button')
         if widget:
             widget.config(state='disabled')
+
         def run():
             try:
                 func(*args, **kwargs)
@@ -58,5 +65,6 @@ def safe_button_action(func):
             finally:
                 if widget:
                     widget.config(state='normal')
-        threading.Thread(target=run).start()
+
+        threading.Thread(target=run, daemon=True).start()
     return wrapper

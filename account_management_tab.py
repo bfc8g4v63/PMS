@@ -1,11 +1,12 @@
-# account_management_tab.py
+#$ account_management_tab.py
+#% 帳號管理分頁，包含新增/刪除/修改使用者、權限設定。
 import tkinter as tk
-import sqlite3
 import hashlib
 import re
 from tkinter import ttk, messagebox
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
+import fixture_helper as FH
 
 def build_user_management_tab(tab, db_name, current_user):
 
@@ -50,9 +51,7 @@ def build_user_management_tab(tab, db_name, current_user):
     def refresh_users():
         for row in tree.get_children():
             tree.delete(row)
-        with sqlite3.connect(db_name, timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            
+        with FH.get_conn(db_name) as conn:
             cursor = conn.cursor()
             sql = """SELECT username, role, can_add, can_delete, active,
                 can_upload_sop, can_view_logs, can_delete_logs,
@@ -72,7 +71,6 @@ def build_user_management_tab(tab, db_name, current_user):
                     *["✓" if v else "✕" for v in row[2:]]
                 ]
                 tree.insert("", "end", values=display_row, tags=tags)
-
         tree.tag_configure("disabled", foreground="gray")
 
     filter_combo.bind("<<ComboboxSelected>>", lambda e: refresh_users())
@@ -120,15 +118,11 @@ def build_user_management_tab(tab, db_name, current_user):
     def hash_password(password):
         return hashlib.sha256(password.encode("utf-8")).hexdigest()
 
-
     def add_user():
         new_user = entry_user.get().strip()
         new_pw = entry_pass.get().strip()
         role = role_var.get()
         permissions = collect_permission_values()
-        can_add = permissions["can_add"]
-        can_delete = permissions["can_delete"]
-        active = permissions["active"]
 
         if not new_user or not new_pw:
             messagebox.showwarning("警告", "請填寫帳號與密碼")
@@ -142,8 +136,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
         hashed_pw = hash_password(new_pw)
 
-        with sqlite3.connect(db_name,timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
+        with FH.get_conn(db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users WHERE username=?", (new_user,))
             if cursor.fetchone():
@@ -156,10 +149,9 @@ def build_user_management_tab(tab, db_name, current_user):
             values = [new_user, hashed_pw, role, specialty_var.get()] + [permission_vars[k].get() for k in permission_vars]
             cursor.execute(sql, values)
             conn.commit()
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
 
         messagebox.showinfo("成功", "使用者已新增")
-        log_activity(db_name, current_user, "add_user", new_user, module="帳號管理")
+        log_activity(db_name, current_user["user"], "add_user", new_user, module="帳號管理")
 
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)
@@ -204,11 +196,8 @@ def build_user_management_tab(tab, db_name, current_user):
         entry_edit_user.insert(0, username)
         role_edit.set(item[1])
 
-        with sqlite3.connect(db_name,timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            
+        with FH.get_conn(db_name) as conn:
             cursor = conn.cursor()
-
             cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
             specialty = cursor.fetchone()
             edit_specialty.set(specialty[0] if specialty else "")
@@ -231,7 +220,7 @@ def build_user_management_tab(tab, db_name, current_user):
             return
 
         original_username = tree.item(selected[0])["values"][0]
-        if original_username == current_user.get("user"):
+        if original_username == current_user["user"]:
             messagebox.showerror("錯誤", "無法修改當前登入帳號")
             return
 
@@ -239,11 +228,9 @@ def build_user_management_tab(tab, db_name, current_user):
         new_pass = entry_edit_pass.get().strip()
         role = role_edit.get()
         specialty = edit_specialty.get()
-
         permissions = {k: v.get() for k, v in permission_vars.items()}
 
-        with sqlite3.connect(db_name, timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
+        with FH.get_conn(db_name) as conn:
             cursor = conn.cursor()
 
             if new_username and new_username != original_username:
@@ -286,11 +273,10 @@ def build_user_management_tab(tab, db_name, current_user):
                     permissions["can_view_issues"], permissions["can_manage_users"],
                     original_username
                 ))
-
             conn.commit()
-            conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
         messagebox.showinfo("成功", "已更新")
-        log_activity(db_name, current_user, "update_user", original_username)
+        log_activity(db_name, current_user["user"], "update_user", original_username)
         entry_edit_user.delete(0, tk.END)
         entry_edit_pass.delete(0, tk.END)
         refresh_users()
@@ -301,18 +287,16 @@ def build_user_management_tab(tab, db_name, current_user):
             messagebox.showwarning("未選擇", "請選擇帳號")
             return
         username = tree.item(selected[0])["values"][0]
-        if username == current_user.get("user"):
+        if username == current_user["user"]:
             messagebox.showerror("錯誤", "無法刪除自己")
             return
         if messagebox.askyesno("確認", f"是否確定要刪除帳號「{username}」？"):
-            with sqlite3.connect(db_name,timeout=10) as conn:
-                conn.execute("PRAGMA journal_mode=WAL;")
+            with FH.get_conn(db_name) as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM users WHERE username=?", (username,))
                 conn.commit()
-                conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
             messagebox.showinfo("成功", "使用者已刪除")
-            log_activity(db_name, current_user, "delete_user", username)
+            log_activity(db_name, current_user["user"], "delete_user", username)
             refresh_users()
 
     tk.Button(edit_frame, text="更新權限", command=update_user).grid(row=5, column=1, pady=5)

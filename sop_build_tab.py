@@ -1,15 +1,15 @@
 # sop_build_tab.py
+# SOP 生成/套用分頁，PDF 拼圖、合併、套用邏輯
 import tkinter as tk
 import threading
 import shutil
 import os
-import sqlite3
 from tkinter import filedialog, messagebox, ttk
 import fitz
 import re
 from datetime import datetime
 from utils import log_activity
-
+import fixture_helper as FH  # 統一 DB 連線
 
 UPLOAD_PATHS = {
     "dip": r"\\192.120.100.177\工程部\生產管理\SOP生成\DIP",
@@ -26,7 +26,11 @@ SOP_SAVE_PATHS = {
     "oqc": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查表OQC"
 }
 
-def build_sop_upload_tab(tab_frame, current_user, db_name):
+def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
+    """SOP 生成區：PDF 拼圖合併與儲存
+    - 無 DB 寫入（僅寫檔與 log_activity），因此無 sqlite，無 checkpoint
+    - 完成後若提供 on_refresh 會觸發 GUI 自動刷新
+    """
     role = current_user.get("role", "")
     specialty = current_user.get("specialty", "").lower()
     selected_uploads = []
@@ -36,7 +40,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     if role == "engineer" and not specialty:
         tk.Label(tab_frame, text="您僅有查閱權限，無法執行 SOP 上傳。", fg="red").pack(padx=10, pady=20)
         return
-    
+
     main_frame = tk.Frame(tab_frame)
     main_frame.pack(fill="both", expand=True)
 
@@ -67,7 +71,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         if not search_path:
             tk.Label(left, text="您沒有 SOP 上傳權限", fg="red").pack(pady=20)
             return
-    
+
     title_font = ("Arial", 10, "bold")
     tk.Label(left, text="📄 SOP 生成區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
     tk.Label(left, text="\nSOP 拼圖上傳").pack(anchor="w")
@@ -96,7 +100,6 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
         if not dest_path:
             messagebox.showerror("錯誤", "未能判定上傳路徑。")
             return
-
         if not selected_uploads:
             messagebox.showwarning("未選擇檔案", "請先選取要上傳的 PDF 檔案。")
             return
@@ -207,31 +210,27 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             sort_list.select_set(i+1)
 
     def generate_pdf():
-        threading.Thread(target=generate_pdf_thread).start()
+        threading.Thread(target=generate_pdf_thread, daemon=True).start()
 
     def generate_pdf_thread():
         output_name = entry_filename.get().strip()
-
         if not output_name:
             entry_filename.after(0, lambda: messagebox.showwarning("請輸入檔名", "請輸入儲檔名稱"))
             return
         if not selected_files:
             entry_filename.after(0, lambda: messagebox.showwarning("未選擇內容", "請先選擇並排序要合併的 PDF"))
             return
-
         if not re.match(r"^\d{8,12}_.+$", output_name):
             entry_filename.after(0, lambda: messagebox.showerror("錯誤", "請依格式輸入：料號_品名（例：12345678_產品名）"))
             return
 
         specialty_key = dest_path_var.get()
         save_dir = SOP_SAVE_PATHS.get(specialty_key)
-
         if not save_dir:
             entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"無法判定專長「{specialty_key}」的儲存路徑"))
             return
 
         os.makedirs(save_dir, exist_ok=True)
-
         timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
         final_filename = f"{output_name}_{timestamp}.pdf"
         save_path = os.path.join(save_dir, final_filename)
@@ -256,7 +255,6 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
                     doc.close()
                 else:
                     skipped.append(f)
-
                 progress = (i + 1) / total_files * 100
                 update_progress(progress, f"處理中: {f}")
 
@@ -264,8 +262,9 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
             merged_pdf.save(save_path)
             merged_pdf.close()
 
+            # 記錄活動
             log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
-            entry_filename.after(0, lambda: messagebox.showinfo("成功", f"已儲存拼圖式 SOP"))
+            entry_filename.after(0, lambda: messagebox.showinfo("成功", "已儲存拼圖式 SOP"))
 
             if skipped:
                 skipped_str = "\n".join(skipped)
@@ -273,17 +272,20 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
 
             update_progress(100, "SOP 生成完成 ✔")
 
+            # GUI 自動刷新（若外部提供）
+            if callable(on_refresh):
+                entry_filename.after(0, on_refresh)
+
         except Exception as e:
             entry_filename.after(0, lambda: messagebox.showerror("錯誤", f"儲存失敗: {e}"))
 
     tk.Label(left, text="存檔名稱：").pack(anchor="w")
-
     filename_frame = tk.Frame(left)
     filename_frame.pack(anchor="w", pady=5)
     entry_filename = tk.Entry(filename_frame, width=30)
     entry_filename.pack(side="left")
-
     tk.Button(filename_frame, text="生成 SOP", bg="lightgreen", width=12, command=generate_pdf).pack(side="left", padx=10)
+
     progress_var = tk.DoubleVar()
     progress_bar = ttk.Progressbar(left, variable=progress_var, maximum=100, length=300)
     progress_bar.pack(anchor="w", pady=5)
@@ -292,16 +294,19 @@ def build_sop_upload_tab(tab_frame, current_user, db_name):
     status_label = tk.Label(left, textvariable=status_var, fg="blue")
     status_label.pack(anchor="w", pady=2)
 
-def build_sop_apply_section(parent_frame, current_user, db_name):
+
+def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None):
+    """SOP 套用區：
+    - 查詢來源（SOP大禮包）、勾選目標料號，批次複製並更新 issues 對應欄位
+    - 連線統一 FH.get_conn，無 checkpoint；完成後支援 on_refresh
+    """
     title_font = ("Arial", 10, "bold")
     tk.Label(parent_frame, text="📚 SOP 套用區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
     role = current_user.get("role", "")
     specialty = current_user.get("specialty", "").lower()
 
     if role == "engineer" and not specialty:
-        lbl = tk.Label(parent_frame,
-                       text="您僅有查閱權限，無法執行 SOP 套用。", 
-                       fg="red")
+        lbl = tk.Label(parent_frame, text="您僅有查閱權限，無法執行 SOP 套用。", fg="red")
         lbl.pack(padx=10, pady=20)
         return
 
@@ -317,7 +322,6 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
     source_var = tk.StringVar()
     source_entry = tk.Entry(search_frame, textvariable=source_var, width=25)
     source_entry.pack(side="left", padx=(0, 5))
-
     tk.Label(search_frame, text="指定來源", anchor="w").pack(side="left", padx=(0, 5))
 
     role = current_user.get("role", "")
@@ -350,21 +354,19 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
     apply_frame.pack(anchor="nw", padx=10, pady=(10, 0), fill="none")
     btn_frame = tk.Frame(main_wrapper)
     btn_frame.pack(anchor="nw", padx=10, pady=(5, 0))
-    
+
     apply_canvas = tk.Canvas(apply_frame)
     scroll_y = ttk.Scrollbar(apply_frame, orient="vertical", command=apply_canvas.yview)
     scroll_x = ttk.Scrollbar(apply_frame, orient="horizontal", command=apply_canvas.xview)
 
     apply_scroll = tk.Frame(apply_canvas)
-
     apply_scroll.bind("<Configure>", lambda e: apply_canvas.configure(scrollregion=apply_canvas.bbox("all")))
     apply_canvas.create_window((0, 0), window=apply_scroll, anchor="nw")
     apply_canvas.configure(height=170, width=720, yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
 
-
     apply_canvas.pack(side="left", fill="both", expand=True)
     scroll_y.pack(side="right", fill="y")
-    scroll_x.pack(side="bottom", fill="x")    
+    scroll_x.pack(side="bottom", fill="x")
 
     apply_items = []
     apply_checks = []
@@ -377,24 +379,19 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
 
         for widget in apply_scroll.winfo_children():
             widget.destroy()
-
         apply_items.clear()
         apply_checks.clear()
 
         terms_and = [t.strip() for t in keyword.split('&')] if '&' in keyword else []
         terms_or = [t.strip() for t in keyword.split('/')] if '/' in keyword else []
-        
-        with sqlite3.connect(db_name, timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
-            
+
+        with FH.get_conn(db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT product_code, product_name FROM issues")
             all_data = cursor.fetchall()
-            
 
         for code, name in all_data:
             combined = f"{code}_{name}".lower()
-            matched = False
             if terms_and:
                 matched = all(term in combined for term in terms_and)
             elif terms_or:
@@ -408,7 +405,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                 cb.pack(anchor="w")
                 apply_items.append((code, name))
                 apply_checks.append(var)
-    
+
     tree = ttk.Treeview(sub_list_frame, columns=("filename",), show="headings", selectmode="extended", height=7)
     tree.heading("filename", text="檔案名稱")
     tree.column("filename", width=720, anchor="w")
@@ -416,7 +413,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
 
     scrollbar_x = ttk.Scrollbar(sub_list_frame, orient="horizontal", command=tree.xview)
     scrollbar_x.pack(side="bottom", fill="x")
-    tree.configure(xscrollcommand=scrollbar_x.set) 
+    tree.configure(xscrollcommand=scrollbar_x.set)
     scrollbar = ttk.Scrollbar(sub_list_frame, orient="vertical", command=tree.yview)
     tree.configure(yscrollcommand=scrollbar.set)
     scrollbar.pack(side="right", fill="y")
@@ -429,7 +426,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                 source_var.set("")
             else:
                 source_var.set(filename)
-    
+
     tree.bind("<Double-1>", on_treeview_double_click)
 
     def search_apply_files():
@@ -445,9 +442,11 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
             messagebox.showerror("錯誤", f"無法決定 {selected_key} 對應的路徑")
             return
 
-        files = []
         if os.path.isdir(search_path):
-            files = [os.path.join(search_path, f) for f in os.listdir(search_path) if keyword in f.lower() and f.lower().endswith(".pdf")]
+            files = [os.path.join(search_path, f) for f in os.listdir(search_path)
+                     if keyword in f.lower() and f.lower().endswith(".pdf")]
+        else:
+            files = []
 
         for f in files:
             tree.insert("", "end", values=(os.path.basename(f),))
@@ -460,8 +459,8 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
     tk.Button(btn_frame, text="全選", command=select_all).pack(side="left", padx=5)
 
     def apply_to_all():
-        threading.Thread(target=apply_thread).start()
-        
+        threading.Thread(target=apply_thread, daemon=True).start()
+
     tk.Button(btn_frame, text="套用", command=apply_to_all).pack(side="left", padx=5)
 
     def apply_thread():
@@ -512,7 +511,6 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
             "oqc": "oqc_checklist"
         }
         field_name = field_map.get(specialty_key)
-
         if not field_name:
             messagebox.showerror("錯誤", f"無法決定 {specialty_key} 的資料欄位")
             return
@@ -531,16 +529,18 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
                 dest_path = os.path.join(dest_dir, display_name)
                 shutil.copy(matched_main_path, dest_path)
 
-                with sqlite3.connect(db_name, timeout=10) as conn:
-                    conn.execute("PRAGMA journal_mode=WAL;")
+                with FH.get_conn(db_name) as conn:
                     cursor = conn.cursor()
-                    cursor.execute(f"""
+                    cursor.execute(
+                        f"""
                         UPDATE issues
                         SET {field_name} = ?, created_at = ?
                         WHERE product_code = ?
-                    """, (display_name, timestamp, code))
+                        """,
+                        (display_name, timestamp, code),
+                    )
                     conn.commit()
-                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE);")
+
                 log_activity(db_name, current_user.get("user"), "apply_sop", display_name, module="SOP套用")
 
                 count += 1
@@ -551,6 +551,10 @@ def build_sop_apply_section(parent_frame, current_user, db_name):
 
         update_progress(100, "SOP 套用完成 ✔")
         messagebox.showinfo("完成", f"已完成套用，共處理 {count} 筆")
+
+        # 自動刷新 GUI（若外部提供）
+        if callable(on_refresh):
+            parent_frame.after(0, on_refresh)
 
         search_apply_files()
 

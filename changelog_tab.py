@@ -1,11 +1,12 @@
-# changelog_tab.py
+#$ changelog_tab.py
+#% 改版歷程分頁，顯示/管理 changelog 表內容
 import tkinter as tk
 from tkinter import ttk, messagebox
-import sqlite3
 from datetime import datetime
 import re
 
 from schema_helper import get_next_changelog_version
+import fixture_helper as FH
 
 def build_changelog_tab(tab, current_role, db_name):
     frame = ttk.Frame(tab)
@@ -36,7 +37,7 @@ def build_changelog_tab(tab, current_role, db_name):
     if current_role == "admin":
         status_label.grid(row=1, column=0, columnspan=4, sticky="w", pady=(5, 0))
 
-    original_content = ""
+    original_content = {"value": ""}
 
     def expected_next_version():
         return get_next_changelog_version(db_name)
@@ -52,7 +53,7 @@ def build_changelog_tab(tab, current_role, db_name):
             if (major, minor, patch) < (1, 0, 0):
                 add_button.config(state=tk.DISABLED)
                 return
-            with sqlite3.connect(db_name) as conn:
+            with FH.get_conn(db_name) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT COUNT(*) FROM changelog WHERE version = ?", (version,))
                 exists = cursor.fetchone()[0] > 0
@@ -67,7 +68,7 @@ def build_changelog_tab(tab, current_role, db_name):
 
         def on_content_change(*args):
             current = content_entry.get().strip()
-            if current == original_content or not version_entry.get().strip():
+            if current == original_content["value"] or not version_entry.get().strip():
                 update_button.config(state=tk.DISABLED)
             else:
                 update_button.config(state=tk.NORMAL)
@@ -93,19 +94,18 @@ def build_changelog_tab(tab, current_role, db_name):
             if version != expected:
                 messagebox.showerror("版本跳號", f"不可以跳版。下一個合法版本應該是 {expected}")
                 return
-            with sqlite3.connect(db_name, timeout=10) as conn:
-                conn.execute("PRAGMA journal_mode=WAL;")
-                cursor = conn.cursor()
-                now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                try:
+            try:
+                with FH.get_conn(db_name) as conn:
+                    cursor = conn.cursor()
+                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     cursor.execute(
                         "INSERT INTO changelog (version, date, content) VALUES (?, ?, ?)",
                         (version, now, content),
                     )
                     conn.commit()
-                except sqlite3.IntegrityError:
-                    messagebox.showerror("版本重複", f"版本 {version} 已存在，請重新輸入")
-                    return
+            except Exception:
+                messagebox.showerror("版本重複", f"版本 {version} 已存在，請重新輸入")
+                return
             refresh_changelog()
             version_entry.delete(0, tk.END)
             content_entry.delete(0, tk.END)
@@ -113,14 +113,12 @@ def build_changelog_tab(tab, current_role, db_name):
             status_var.set("")
 
         def update_changelog():
-            nonlocal original_content
             version = version_entry.get().strip()
             content = content_entry.get().strip()
             if not version or not content:
                 messagebox.showwarning("欄位缺漏", "請輸入版本與內容")
                 return
-            with sqlite3.connect(db_name, timeout=10) as conn:
-                conn.execute("PRAGMA journal_mode=WAL;")
+            with FH.get_conn(db_name) as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "UPDATE changelog SET content = ? WHERE version = ?",
@@ -133,7 +131,7 @@ def build_changelog_tab(tab, current_role, db_name):
             content_entry.delete(0, tk.END)
             update_button.config(state=tk.DISABLED)
             status_var.set("")
-            original_content = ""
+            original_content["value"] = ""
 
         def delete_selected():
             selected = tree.selection()
@@ -143,8 +141,7 @@ def build_changelog_tab(tab, current_role, db_name):
             version = item["values"][0]
             confirm = messagebox.askyesno("確認刪除", f"是否刪除版本 {version}？")
             if confirm:
-                with sqlite3.connect(db_name, timeout=10) as conn:
-                    conn.execute("PRAGMA journal_mode=WAL;")
+                with FH.get_conn(db_name) as conn:
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM changelog WHERE version = ?", (version,))
                     conn.commit()
@@ -170,8 +167,7 @@ def build_changelog_tab(tab, current_role, db_name):
 
     def refresh_changelog():
         tree.delete(*tree.get_children())
-        with sqlite3.connect(db_name, timeout=10) as conn:
-            conn.execute("PRAGMA journal_mode=WAL;")
+        with FH.get_conn(db_name) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT version, date, content FROM changelog ORDER BY rowid DESC")
             for row in cursor.fetchall():
@@ -189,10 +185,10 @@ def build_changelog_tab(tab, current_role, db_name):
         version_entry.insert(0, values[0])
         content_entry.insert(0, values[2])
         status_var.set(f"目前編輯中版本：{values[0]}")
-        nonlocal original_content
-        original_content = values[2]
+        original_content["value"] = values[2]
         validate_version()
-        on_content_change()
+        if current_role == "admin":
+            content_entry.bind("<KeyRelease>", lambda e: update_button.config(state=tk.NORMAL))
 
     tree.bind("<Double-1>", on_tree_double_click)
 

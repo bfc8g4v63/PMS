@@ -1,8 +1,28 @@
-# write_version.py
+#$ write_version.py
+#% 版本控制腳本：同時輸出在地端與 .177 雲端版本檔案
+import os
 from datetime import datetime
 
 __version__ = "v1.7.9"
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-with open("version.txt", "w", encoding="utf-8") as f:
-    f.write(f"{__version__} - built at {timestamp}")
+content = f"{__version__} - built at {timestamp}"
+
+# 在地端路徑
+LOCAL_FILE = "version.txt"
+
+# 雲端路徑
+CLOUD_FILE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\version.txt"
+
+# 輸出在地端
+with open(LOCAL_FILE, "w", encoding="utf-8") as f:
+    f.write(content)
+
+# 輸出到雲端
+try:
+    os.makedirs(os.path.dirname(CLOUD_FILE), exist_ok=True)
+    with open(CLOUD_FILE, "w", encoding="utf-8") as f:
+        f.write(content)
+    print(f"[✓] 已更新本地與雲端版本檔：{__version__}")
+except Exception as e:
+    print(f"[X] 雲端版本檔更新失敗: {e}")

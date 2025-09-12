@@ -1,10 +1,17 @@
-import sqlite3
+# schema_helper.py
+# 資料表結構管理
 import re
+import sqlite3  # 僅保留例外處理需要（如 OperationalError）
+from db_helper import get_conn, DB_PATH  # 統一連線
 
 def get_required_columns():
     return {
         "activity_logs": {
-            "product_code": "TEXT",
+            "id": "INTEGER PRIMARY KEY AUTOINCREMENT",
+            "username": "TEXT",
+            "action": "TEXT",
+            "filename": "TEXT",
+            "timestamp": "TEXT",
             "module": "TEXT"
         },
         "users": {
@@ -29,8 +36,8 @@ def get_required_columns():
     }
 
 def auto_add_missing_columns(db_path, schema_map, verbose=False):
-    with sqlite3.connect(db_path, timeout=10) as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
+    """為了回溯相容，保留 db_path 參數但不再使用；改統一走 db_helper.get_conn()。"""
+    with get_conn() as conn:
         cursor = conn.cursor()
         for table, columns in schema_map.items():
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,))
@@ -55,7 +62,8 @@ def auto_add_missing_columns(db_path, schema_map, verbose=False):
                             print(f"欄位新增失敗 {col_name}@{table}: {e}")
 
 def ensure_changelog_schema(db_name, verbose=False):
-    with sqlite3.connect(db_name) as conn:
+    """保留 db_name 參數但不再使用；統一連線。"""
+    with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS changelog (
@@ -73,7 +81,8 @@ def ensure_changelog_schema(db_name, verbose=False):
         conn.commit()
 
 def get_next_changelog_version(db_path):
-    with sqlite3.connect(db_path) as conn:
+    """保留 db_path 參數但不再使用；統一連線。"""
+    with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT version FROM changelog")
         versions = cursor.fetchall()
@@ -112,9 +121,9 @@ def add_col_if_missing(conn, table: str, col: str, col_type: str):
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
     cur.close()
 
-def ensure_fixture_schema(db_path: str):
-    with sqlite3.connect(db_path, timeout=10) as conn:
-        conn.execute("PRAGMA journal_mode=WAL;")
+def ensure_fixture_schema(db_path: str, verbose=False):
+    """保留 db_path 參數但不再使用；統一連線。"""
+    with get_conn() as conn:
         cur = conn.cursor()
 
         cur.execute("""
@@ -135,6 +144,10 @@ def ensure_fixture_schema(db_path: str):
         add_col_if_missing(conn, "fixtures", "unit_price", "REAL DEFAULT 0")
         add_col_if_missing(conn, "fixtures", "safety_stock", "INTEGER DEFAULT 0")
         add_col_if_missing(conn, "fixtures", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        if verbose:
+            cur.execute("PRAGMA table_info(fixtures)")
+            cols = [r[1] for r in cur.fetchall()]
+            print("資料表 fixtures 現有欄位:", cols)
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS warehouse_stock (
@@ -148,6 +161,10 @@ def ensure_fixture_schema(db_path: str):
         add_col_if_missing(conn, "warehouse_stock", "part_no", "TEXT")
         add_col_if_missing(conn, "warehouse_stock", "warehouse", "TEXT")
         add_col_if_missing(conn, "warehouse_stock", "qty", "INTEGER DEFAULT 0")
+        if verbose:
+            cur.execute("PRAGMA table_info(warehouse_stock)")
+            cols = [r[1] for r in cur.fetchall()]
+            print("資料表 warehouse_stock 現有欄位:", cols)
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS transfer_logs (
@@ -164,8 +181,11 @@ def ensure_fixture_schema(db_path: str):
         add_col_if_missing(conn, "transfer_logs", "to_warehouse", "TEXT")
         add_col_if_missing(conn, "transfer_logs", "qty", "INTEGER")
         add_col_if_missing(conn, "transfer_logs", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        if verbose:
+            cur.execute("PRAGMA table_info(transfer_logs)")
+            cols = [r[1] for r in cur.fetchall()]
+            print("資料表 transfer_logs 現有欄位:", cols)
 
-        # fixture_boms
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fixture_boms (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -181,17 +201,22 @@ def ensure_fixture_schema(db_path: str):
         add_col_if_missing(conn, "fixture_boms", "qty", "INTEGER DEFAULT 1")
         add_col_if_missing(conn, "fixture_boms", "remark", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "created_at", "TIMESTAMP DEFAULT CURRENT_TIMESTAMP")
+        if verbose:
+            cur.execute("PRAGMA table_info(fixture_boms)")
+            cols = [r[1] for r in cur.fetchall()]
+            print("資料表 fixture_boms 現有欄位:", cols)
 
         conn.commit()
         cur.close()
 
 def print_tables_info(db_path: str):
-    with sqlite3.connect(db_path) as conn:
+    """保留 db_path 參數做顯示；實際查詢走統一連線。"""
+    with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         tables = [r[0] for r in cur.fetchall()]
-        print(f"使用資料庫：{db_path}")
-        print("資料庫初始化完成，實際位置：", db_path)
+        print(f"使用資料庫（參數）：{db_path}")
+        print("實際使用資料庫（db_helper.DB_PATH）：", DB_PATH)
         for t in tables:
             cur.execute(f"PRAGMA table_info({t})")
             cols = [r[1] for r in cur.fetchall()]

@@ -1,3 +1,5 @@
+#$ fixture_bom_tab.py
+#% GUI 分頁「治具 BOM」
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (
@@ -6,7 +8,7 @@ from fixture_helper import (
     delete_bom_item
 )
 
-def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = None) -> tk.Frame:
+def build_fixture_bom_tab(parent: tk.Widget, current_user: str) -> tk.Frame:
     root = tk.Frame(parent)
     root.pack(fill="both", expand=True)
 
@@ -59,6 +61,8 @@ def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = N
             part = part_var.get().strip()
             if not part:
                 raise ValueError("請輸入料號後再查詢")
+            if len(part) not in (8, 12) or not part.isdigit():
+                raise ValueError("料號必須為 8 或 12 碼數字")
             for i in tree.get_children():
                 tree.delete(i)
             rows = get_bom_by_part(part)
@@ -74,6 +78,8 @@ def build_fixture_bom_tab(parent: tk.Widget, current_user: str, db_name: str = N
             qty = int(bom_qty_var.get().strip())
             if not part or not name or qty <= 0:
                 raise ValueError("請輸入完整資訊並確認數量為正整數")
+            if len(part) not in (8, 12) or not part.isdigit():
+                raise ValueError("料號必須為 8 或 12 碼數字")
             add_bom_item(part, name, qty)
             bom_name_var.set("")
             bom_qty_var.set("")

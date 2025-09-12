@@ -1,0 +1,76 @@
+flowchart LR
+    %% ===================
+    %% PMS + Fixture System Overview
+    %% ===================
+    classDef title fill:#f6f8fa,stroke:#d0d7de,color:#24292e,stroke-width:1px;
+    classDef box fill:#fff,stroke:#d0d7de,stroke-width:1px;
+    classDef db fill:#fdf6e3,stroke:#d0d7de,stroke-width:1px;
+    classDef svc fill:#eef6ff,stroke:#b6d4fe,stroke-width:1px;
+    classDef warn fill:#fff2cc,stroke:#f1c232,stroke-width:1px;
+    classDef good fill:#eaffea,stroke:#b7e1b5,stroke-width:1px;
+
+    %% Layers
+    subgraph UI["🖥️ Tkinter 主介面 (Notebook 分頁)"]
+        direction LR
+        UI_LOGIN["登入 / 帳號權限<br/>Admin / Engineer / Leader / Operator"]:::box
+        UI_SOP["SOP 管理<br/>上傳/合併/綁定/批量套用/統計"]:::box
+        UI_FIX["治具管理<br/>新增治具料號(8或12碼)/入庫/轉倉/扣減<br/>查詢/分倉統計/即時刷新"]:::box
+        UI_FBOM["治具 BOM<br/>建置生產所需治具需求清單"]:::box
+        UI_DB["DB 管理<br/>切換 Dev/正式、備份/還原、WAL"]:::box
+        UI_LOG["操作紀錄 / 版本追溯"]:::box
+    end
+
+    subgraph SVC["⚙️ 應用服務層"]
+        direction TB
+        SVC_AUTH["權限驗證 / Session / 閒置登出 / 單實例啟動"]:::svc
+        SVC_SOP["SOP Service<br/>合併PDF / 綁定料號 / 套用 / 統計(各製程唯一料號數)"]:::svc
+        SVC_FIX["Fixture Service<br/>insert_fixture()<br/>add_stock() / transfer_stock()<br/>倉別規則/防呆(不可負數)"]:::svc
+        SVC_FBOM["Fixture BOM Service"]:::svc
+        SVC_LOG["Log Service<br/>log_activity() / ensure_changelog_schema()"]:::svc
+        SVC_DBM["DB 管理器<br/>WAL / 備份 / 還原 / 連線切換"]:::svc
+        SVC_UPDATE["啟動更新檢查 / 自動更新"]:::svc
+    end
+
+    subgraph DATA["🗄️ 資料層 (SQLite)"]
+        direction TB
+        DB_MAIN["Main Server DB<br/>\\\\192.120.100.177\\工程部\\生產管理\\生產資訊平台\\PMS.db"]:::db
+        DB_DEV["Dev 本地 DB (可切換)"]:::db
+        T_USERS["users"]:::db
+        T_SOP["sop_records"]:::db
+        T_WARE["warehouses<br/>預設：虹堡 / 上齊 / 睿均 / 不良品<br/>支援自定新增倉別"]:::db
+        T_FIX["fixtures<br/>料號(8或12碼)、品名、規格、單位、安庫、備註等"]:::db
+        T_FBOM["fixture_bom<br/>需求結構、料號對應"]:::db
+        T_LOG["changelog / activity_log"]:::db
+    end
+
+    %% UI -> Service
+    UI_LOGIN --> SVC_AUTH
+    UI_SOP --> SVC_SOP
+    UI_FIX --> SVC_FIX
+    UI_FBOM --> SVC_FBOM
+    UI_DB --> SVC_DBM
+    UI_LOG --> SVC_LOG
+
+    %% Service -> Data
+    SVC_AUTH --> T_USERS
+    SVC_SOP --> T_SOP
+    SVC_SOP --> T_LOG
+    SVC_FIX --> T_FIX
+    SVC_FIX --> T_WARE
+    SVC_FIX --> T_LOG
+    SVC_FBOM --> T_FBOM
+    SVC_DBM --> DB_MAIN
+    SVC_DBM --> DB_DEV
+    SVC_LOG --> T_LOG
+
+    %% Business Rules & Flows (notes)
+    RULES1["規則：建立治具料號時，同步建立四倉資料；入庫僅限『虹堡』；轉倉可任意倉別但來源不可為負；所有欄位防呆；操作後即時刷新"]:::warn
+    RULES2["SOP統計：各製程(DIP/組裝/測試/包裝/OQC)以『非空白的唯一料號數』計算"]:::warn
+    RULES3["DB：WAL 模式、備份/還原、正式與開發路徑切換；changelog 由 ensure_changelog_schema() 初始化"]:::warn
+
+    UI_FIX --- RULES1
+    UI_SOP --- RULES2
+    UI_DB  --- RULES3
+
+    %% Good paths
+    SVC_UPDATE:::good --> UI_LOGIN
