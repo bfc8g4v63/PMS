@@ -1,6 +1,7 @@
-# db_helper.py
+#$ db_helper.py
 #% SQLite 連線管理，統一由此進入，不再呼叫 fixture_helper
 import sqlite3
+from contextlib import contextmanager
 
 DB_PATH = None
 
@@ -9,17 +10,25 @@ def set_db_path(path: str):
     DB_PATH = path
 
 def get_conn(path: str = None):
-    """取得資料庫連線，預設使用 DB_PATH"""
     target = path or DB_PATH
     if not target:
         raise ValueError("DB_PATH 尚未設定，請先呼叫 set_db_path()")
-    conn = sqlite3.connect(target, timeout=30, isolation_level=None)
+    conn = sqlite3.connect(target, timeout=10, isolation_level="")
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
-def tx():
-    return get_conn()
+@contextmanager
+def tx(path: str = None):
+    conn = get_conn(path)
+    try:
+        yield conn
+        conn.commit()
+    except:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 def db_execute(sql: str, params: tuple = ()):
     with get_conn() as conn:
@@ -46,4 +55,7 @@ def db_query_one(sql: str, params: tuple = ()):
         return cur.fetchone()
 
 def safe_checkpoint(mode: str = "PASSIVE"):
-    return
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(f"PRAGMA wal_checkpoint({mode});")
+        return cur.fetchall()

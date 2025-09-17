@@ -1,5 +1,5 @@
-# sop_build_tab.py
-# SOP 生成/套用分頁，PDF 拼圖、合併、套用邏輯
+#$ sop_build_tab.py
+#% SOP 生成/套用分頁，PDF 拼圖、合併、套用邏輯
 import tkinter as tk
 import threading
 import shutil
@@ -9,7 +9,7 @@ import fitz
 import re
 from datetime import datetime
 from utils import log_activity
-import fixture_helper as FH  # 統一 DB 連線
+from db_helper import get_conn
 
 UPLOAD_PATHS = {
     "dip": r"\\192.120.100.177\工程部\生產管理\SOP生成\DIP",
@@ -73,7 +73,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
             return
 
     title_font = ("Arial", 10, "bold")
-    tk.Label(left, text="📄 SOP 生成區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
+    tk.Label(left, text="SOP 生成區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
     tk.Label(left, text="\nSOP 拼圖上傳").pack(anchor="w")
     upload_frame = tk.Frame(left)
     upload_frame.pack(anchor="w", pady=5)
@@ -262,8 +262,7 @@ def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
             merged_pdf.save(save_path)
             merged_pdf.close()
 
-            # 記錄活動
-            log_activity(db_name, current_user.get("user"), "generate_sop", final_filename, module="SOP生成")
+            log_activity(user=current_user.get("user"), action="generate_sop", filename=final_filename, module="SOP生成")
             entry_filename.after(0, lambda: messagebox.showinfo("成功", "已儲存拼圖式 SOP"))
 
             if skipped:
@@ -272,7 +271,6 @@ def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
 
             update_progress(100, "SOP 生成完成 ✔")
 
-            # GUI 自動刷新（若外部提供）
             if callable(on_refresh):
                 entry_filename.after(0, on_refresh)
 
@@ -296,12 +294,9 @@ def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
 
 
 def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None):
-    """SOP 套用區：
-    - 查詢來源（SOP大禮包）、勾選目標料號，批次複製並更新 issues 對應欄位
-    - 連線統一 FH.get_conn，無 checkpoint；完成後支援 on_refresh
-    """
+
     title_font = ("Arial", 10, "bold")
-    tk.Label(parent_frame, text="📚 SOP 套用區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
+    tk.Label(parent_frame, text="SOP 套用區", font=title_font, fg="navy").pack(anchor="w", pady=(10, 5))
     role = current_user.get("role", "")
     specialty = current_user.get("specialty", "").lower()
 
@@ -350,26 +345,39 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
     entry_keyword2.pack(side="left", padx=(0, 5))
     tk.Button(keyword_frame, text="套用搜尋", command=lambda: search_apply_targets()).pack(side="left", padx=(0, 20))
 
-    apply_frame = tk.LabelFrame(main_wrapper, text="套用清單", width=720)
-    apply_frame.pack(anchor="nw", padx=10, pady=(10, 0), fill="none")
-    btn_frame = tk.Frame(main_wrapper)
-    btn_frame.pack(anchor="nw", padx=10, pady=(5, 0))
+    apply_frame = tk.LabelFrame(main_wrapper, text="套用清單", width=720, height=120)
+    apply_frame.pack(anchor="nw", padx=10, pady=(10, 0), fill="x")
 
-    apply_canvas = tk.Canvas(apply_frame)
+    apply_canvas = tk.Canvas(apply_frame, height=120)
     scroll_y = ttk.Scrollbar(apply_frame, orient="vertical", command=apply_canvas.yview)
-    scroll_x = ttk.Scrollbar(apply_frame, orient="horizontal", command=apply_canvas.xview)
 
     apply_scroll = tk.Frame(apply_canvas)
-    apply_scroll.bind("<Configure>", lambda e: apply_canvas.configure(scrollregion=apply_canvas.bbox("all")))
+
+    def on_frame_configure(event):
+        apply_canvas.configure(scrollregion=apply_canvas.bbox("all"))
+
+    apply_scroll.bind("<Configure>", on_frame_configure)
     apply_canvas.create_window((0, 0), window=apply_scroll, anchor="nw")
-    apply_canvas.configure(height=170, width=720, yscrollcommand=scroll_y.set, xscrollcommand=scroll_x.set)
+    apply_canvas.configure(yscrollcommand=scroll_y.set)
 
     apply_canvas.pack(side="left", fill="both", expand=True)
     scroll_y.pack(side="right", fill="y")
-    scroll_x.pack(side="bottom", fill="x")
 
     apply_items = []
     apply_checks = []
+
+    def _on_mousewheel(event):
+        apply_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def _on_mousewheel_linux(event):
+        if event.num == 4:
+            apply_canvas.yview_scroll(-1, "units")
+        elif event.num == 5:
+            apply_canvas.yview_scroll(1, "units")
+
+    apply_canvas.bind_all("<MouseWheel>", _on_mousewheel)
+    apply_canvas.bind_all("<Button-4>", _on_mousewheel_linux)
+    apply_canvas.bind_all("<Button-5>", _on_mousewheel_linux)
 
     def search_apply_targets():
         keyword = entry_keyword2.get().strip().lower()
@@ -385,7 +393,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
         terms_and = [t.strip() for t in keyword.split('&')] if '&' in keyword else []
         terms_or = [t.strip() for t in keyword.split('/')] if '/' in keyword else []
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT product_code, product_name FROM issues")
             all_data = cursor.fetchall()
@@ -411,12 +419,9 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
     tree.column("filename", width=720, anchor="w")
     tree.pack(side="left", fill="both", expand=True)
 
-    scrollbar_x = ttk.Scrollbar(sub_list_frame, orient="horizontal", command=tree.xview)
-    scrollbar_x.pack(side="bottom", fill="x")
-    tree.configure(xscrollcommand=scrollbar_x.set)
-    scrollbar = ttk.Scrollbar(sub_list_frame, orient="vertical", command=tree.yview)
-    tree.configure(yscrollcommand=scrollbar.set)
-    scrollbar.pack(side="right", fill="y")
+    scrollbar_y = ttk.Scrollbar(sub_list_frame, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=scrollbar_y.set)
+    scrollbar_y.pack(side="right", fill="y")
 
     def on_treeview_double_click(event):
         item = tree.focus()
@@ -441,13 +446,11 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
         if not search_path:
             messagebox.showerror("錯誤", f"無法決定 {selected_key} 對應的路徑")
             return
-
         if os.path.isdir(search_path):
             files = [os.path.join(search_path, f) for f in os.listdir(search_path)
                      if keyword in f.lower() and f.lower().endswith(".pdf")]
         else:
             files = []
-
         for f in files:
             tree.insert("", "end", values=(os.path.basename(f),))
             sub_items.append(f)
@@ -455,6 +458,9 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
     def select_all():
         for v in apply_checks:
             v.set(True)
+
+    btn_frame = tk.Frame(main_wrapper)
+    btn_frame.pack(anchor="w", padx=10, pady=5)
 
     tk.Button(btn_frame, text="全選", command=select_all).pack(side="left", padx=5)
 
@@ -529,7 +535,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
                 dest_path = os.path.join(dest_dir, display_name)
                 shutil.copy(matched_main_path, dest_path)
 
-                with FH.get_conn(db_name) as conn:
+                with get_conn() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
                         f"""
@@ -541,8 +547,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
                     )
                     conn.commit()
 
-                log_activity(db_name, current_user.get("user"), "apply_sop", display_name, module="SOP套用")
-
+                log_activity(user=current_user.get("user"), action="apply_sop", filename=display_name, module="SOP套用")
                 count += 1
                 update_progress(int(count / total * 100), f"套用中：{display_name}")
 
@@ -552,7 +557,6 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
         update_progress(100, "SOP 套用完成 ✔")
         messagebox.showinfo("完成", f"已完成套用，共處理 {count} 筆")
 
-        # 自動刷新 GUI（若外部提供）
         if callable(on_refresh):
             parent_frame.after(0, on_refresh)
 

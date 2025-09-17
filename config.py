@@ -3,7 +3,7 @@
 import os
 from db_helper import set_db_path   # 改為由 db_helper 提供 DB_PATH 控制
 
-USE_LOCAL_DB = False                 # True: 使用本機資料庫；False: 使用網路資料庫
+USE_LOCAL_DB = True                 # True: 使用本機資料庫；False: 使用網路資料庫
 ENABLE_AUTO_LOGOUT = False          # True: 啟用自動登出功能；False: 不啟用
 VERBOSE_SCHEMA_CHECK = True         # True: 啟用詳細的資料表結構檢查與補齊訊息；False: 關閉
 IDLE_TIMEOUT = 180                  # 自動登出閒置時間（秒），預設 3 分鐘
@@ -24,5 +24,4 @@ else:
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 
 def apply_db_path():
-    """套用 DB_PATH 設定到 db_helper"""
     set_db_path(DB_NAME)

@@ -1,15 +1,11 @@
 #$ db_backup.py
-#% 資料庫備份腳本：將 PMS.db（先 PASSIVE checkpoint）備份至本地資料夾（含時間戳）
+#% 資料庫備份腳本：將 PMS.db 備份至本地資料夾（含時間戳）
 import shutil
 import os
 from datetime import datetime
-from db_helper import safe_checkpoint
 
 SOURCE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
 TARGET_ROOT = r"C:\Nelson\Dev\GitHub\PMS_backup\db_backup"
-
-# 執行 PASSIVE checkpoint（不會造成 lock）
-safe_checkpoint("PASSIVE")
 
 now = datetime.now()
 timestamp = now.strftime("%Y%m%d_%H%M")

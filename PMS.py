@@ -1,5 +1,5 @@
-# $ PMS.py
-# % 登入>主介面>整體初始化
+#$ PMS.py
+#% 登入>主介面>整體初始化
 import tkinter as tk
 import os
 import hashlib
@@ -9,11 +9,12 @@ import shutil
 import atexit
 import time
 import tkinter.font as tkFont
-import fixture_helper as FH
+from fixture_helper import ensure_stock_consistency
+from db_helper import get_conn, set_db_path
 
 from config import apply_db_path
 apply_db_path()
-from utils import log_activity, open_file  # [修改] 使用 utils.open_file
+from utils import log_activity, open_file
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
@@ -32,7 +33,6 @@ from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
 
-# --- DB 路徑決策 ---
 if USE_LOCAL_DB:
     DB_NAME = LOCAL_DB_PATH
 elif os.path.exists(Z_DRIVE_DB):
@@ -40,18 +40,10 @@ elif os.path.exists(Z_DRIVE_DB):
 else:
     DB_NAME = UNC_DB
 
-ensure_changelog_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
-ensure_fixture_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
-auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=VERBOSE_SCHEMA_CHECK)
-FH.ensure_stock_consistency()
-
-if VERBOSE_SCHEMA_CHECK:
-    print_tables_info(DB_NAME)
-
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 print(f"使用資料庫：{DB_NAME}")
+set_db_path(DB_NAME)
 
-# --- 單實例鎖 ---
 lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
 with open(lock_path, "w") as f:
     f.write(str(time.time()))
@@ -63,7 +55,6 @@ def remove_lock():
     except:
         pass
 
-# --- SOP 欄位對照 & 路徑 ---
 SOP_FIELDS = {
     "dip": ("DIP SOP", "dip_sop", "dip_sop_bypass", r"DIP_SOP"),
     "assembly": ("組裝SOP", "assembly_sop", "assembly_sop_bypass", r"組裝SOP"),
@@ -81,7 +72,6 @@ OQC_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查�
 LOG_TABLE = "activity_logs"
 _instance_lock = None
 
-# --- 檔案檢核/儲存 ---
 def is_valid_file(file_path, field_name):
     allowed_extensions = [".pdf"]
     if field_name == "oqc_checklist":
@@ -113,7 +103,6 @@ def save_file_if_exist(file_path, target_folder, username, product_code, product
         print(f"檔案儲存失敗: {e}")
         return "", ""
 
-# --- 程式單實例檢查 ---
 def is_another_instance_running():
     global _instance_lock
     try:
@@ -123,21 +112,23 @@ def is_another_instance_running():
     except OSError:
         return True
 
-# --- DB 初始化 ---
-def init_db():
+def init_db(role):
     if not os.path.exists(DB_NAME):
         messagebox.showerror("錯誤", f"找不到資料庫檔案：\n{DB_NAME}\n\n請確認您是從 PMS Launcher.bat 啟動，或 Z: 磁碟有正確掛載。")
         sys.exit()
-    if not os.access(DB_NAME, os.R_OK | os.W_OK):
-        raise IOError(f"無法讀寫資料庫檔案：{DB_NAME}")
+    if role == "leader":
+        if not os.access(DB_NAME, os.R_OK):
+            raise IOError(f"無法讀取資料庫檔案：{DB_NAME}")
+    else:
+        if not os.access(DB_NAME, os.R_OK | os.W_OK):
+            raise IOError(f"無法讀寫資料庫檔案：{DB_NAME}")
     try:
-        with FH.get_conn(DB_NAME) as conn:
-            pass  # 驗證可開啟
+        with get_conn() as conn:
+            pass
     except Exception as e:
         messagebox.showerror("資料庫錯誤", f"無法開啟資料庫：\n{DB_NAME}\n\n錯誤訊息：{e}")
         sys.exit()
 
-# --- DB 回寫同步 ---
 def sync_back_to_server():
     if USE_LOCAL_DB:
         print("[偵測到本地開發模式] 跳過資料庫回寫")
@@ -154,7 +145,6 @@ def sync_back_to_server():
     except Exception as e:
         print(f"資料回寫失敗: {e}")
 
-# --- 登出與關閉 ---
 def logout_and_exit(root):
     global _instance_lock
     try:
@@ -172,18 +162,11 @@ def logout_and_exit(root):
         root.destroy()
         sys.exit()
 
-# --- 雜湊工具 ---
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
-# --- 登入視窗 ---
 def login():
-    """
-    顯示登入視窗並驗證帳密：
-    - 統一連線：FH.get_conn(DB_NAME)
-    - 無多餘 checkpoint
-    - 回傳使用者授權資訊 dict（與舊版相容）
-    """
+
     result = {
         "user": None,
         "role": None,
@@ -206,7 +189,7 @@ def login():
 
         hashed_pw = hash_password(p)
         try:
-            with FH.get_conn(DB_NAME) as conn:
+            with get_conn() as conn:
                 c = conn.cursor()
                 c.execute(
                     """
@@ -239,7 +222,6 @@ def login():
         except Exception as e:
             messagebox.showerror("資料庫錯誤", f"無法連線資料庫，請稍後再試。\n\n錯誤訊息：{e}")
 
-    # --- GUI ---
     login_window = tk.Tk()
     login_window.title("登入系統")
     login_window.geometry("300x180")
@@ -259,9 +241,8 @@ def login():
     tk.Button(login_window, text="登入", command=try_login).pack(pady=15)
 
     entry_user.focus_set()
-    entry_user.bind("<Return>", lambda e: try_login())
+    entry_user.bind("<Return>", lambda e: entry_pass.focus_set())
     entry_pass.bind("<Return>", lambda e: try_login())
-    login_window.bind("<Return>", lambda e: try_login())
 
     def on_close():
         login_window.destroy()
@@ -269,8 +250,6 @@ def login():
     login_window.protocol("WM_DELETE_WINDOW", on_close)
     login_window.mainloop()
     return result
-
-# 操作紀錄檢視 / 刪除、資料表初始化、SOP 更新工具與按鈕、密碼變更 Tab
 
 def build_log_view_tab(tab, db_name, role):
     tk.Label(tab, text="操作紀錄查詢").pack(anchor="w", padx=10, pady=(10, 0))
@@ -322,7 +301,7 @@ def build_log_view_tab(tab, db_name, role):
         restricted_roles = ("engineer", "leader")
         restricted_keywords = ("add_user", "update_user", "delete_user")
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             base_sql = "SELECT id, username, action, filename, timestamp FROM activity_logs"
             params = []
@@ -377,7 +356,7 @@ def build_log_view_tab(tab, db_name, role):
                 messagebox.showwarning("提醒", "請先選取一筆操作紀錄")
                 return
             if messagebox.askyesno("確認", "確定要刪除所選操作紀錄？"):
-                with FH.get_conn(db_name) as conn:
+                with get_conn() as conn:
                     cursor = conn.cursor()
                     for iid in selected:
                         cursor.execute("DELETE FROM activity_logs WHERE id=?", (iid,))
@@ -386,7 +365,7 @@ def build_log_view_tab(tab, db_name, role):
 
         def delete_all_logs():
             if messagebox.askyesno("確認", "確定要刪除所有操作紀錄？此操作無法復原。"):
-                with FH.get_conn(db_name) as conn:
+                with get_conn() as conn:
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM activity_logs")
                     conn.commit()
@@ -398,7 +377,7 @@ def build_log_view_tab(tab, db_name, role):
     refresh_logs()
 
 def initialize_database():
-    with FH.get_conn(DB_NAME) as conn:
+    with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS issues (
@@ -469,7 +448,7 @@ def save_file(file_path, target_folder, username, product_code=None, product_nam
     try:
         shutil.copy(file_path, target_path)
         if log:
-            log_activity(DB_NAME, username, "upload", filename, module="SOP資訊")
+            log_activity(user=username, action="upload", filename=filename, module="SOP資訊")
         return filename
     except Exception as e:
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
@@ -486,8 +465,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     if not path:
         return None
 
-    # 以 DB 為主，回填品名（若呼叫方傳入空品名）
-    with FH.get_conn(DB_NAME) as conn:
+    with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT product_name FROM issues WHERE product_code=?", (product_code,))
         result = cursor.fetchone()
@@ -501,14 +479,14 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     if not display_name:
         return None
 
-    with FH.get_conn(DB_NAME) as conn:
+    with get_conn() as conn:
         cursor = conn.cursor()
         update_sop_field(cursor, product_code, field_name, display_name)
         if cursor.rowcount == 0:
             messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法更新！")
             return None
         conn.commit()
-    log_activity(DB_NAME, current_user, "update_sop", display_name, module="SOP資訊")
+    log_activity(user=current_user, action="update_sop", filename=display_name, module="SOP資訊")
     return display_name
 
 def create_sop_update_button(
@@ -599,7 +577,7 @@ def build_password_change_tab(tab, db_name, current_user):
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (current_user, old_hash))
             if not cursor.fetchone():
@@ -614,8 +592,6 @@ def build_password_change_tab(tab, db_name, current_user):
         confirm_pass_entry.delete(0, tk.END)
 
     tk.Button(tab, text="變更密碼", command=change_password, bg="lightgreen").pack(pady=10)
-
-# 主介面（SOP資訊、SOP生成、治具…）、查詢/刪除/停用、密碼視窗、__main__
 
 def create_main_interface(root, db_name, login_info):
     current_user = login_info['user']
@@ -659,7 +635,6 @@ def create_main_interface(root, db_name, login_info):
         left_frame.pack(side="left", fill="both", expand=True)
         right_frame = tk.Frame(sop_tab)
         right_frame.pack(side="left", fill="both", padx=10, pady=10)
-        # 保持與既有簽名相容（未強制 on_refresh）
         build_sop_upload_tab(left_frame, login_info, db_name)
         build_sop_apply_section(right_frame, login_info, db_name)
 
@@ -669,7 +644,6 @@ def create_main_interface(root, db_name, login_info):
     if current_role == "admin":
         build_user_management_tab(tabs["帳號管理"], db_name, login_info)
 
-    # ---- SOP資訊頁面（新增/查詢/右鍵停用/刪除）----
     frame = tabs["SOP資訊"]
 
     if current_role != "leader":
@@ -684,7 +658,6 @@ def create_main_interface(root, db_name, login_info):
         entry_name = tk.Entry(form, width=50)
         entry_name.grid(row=1, column=1)
 
-        # [修改] on_refresh 使用 lambda 延後解析，避免 query_data 尚未定義的時序問題
         entry_dip = create_upload_field_with_update(
             2, "DIP SOP", DIP_SOP_PATH, "dip_sop", form, entry_code, entry_name,
             current_user, login_info['specialty'], current_role, "dip",
@@ -725,7 +698,7 @@ def create_main_interface(root, db_name, login_info):
                 messagebox.showerror("錯誤", "必須為 8/12 碼數字")
                 return
 
-            with FH.get_conn(db_name) as conn:
+            with get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT product_code FROM issues WHERE product_code=?", (code,))
                 if cursor.fetchone():
@@ -738,11 +711,11 @@ def create_main_interface(root, db_name, login_info):
                 p_file, p_time = save_file_if_exist(entry_packaging.get().strip(), PACKAGING_SOP_PATH, current_user, code, name, "packaging_sop")
                 o_file, o_time = save_file_if_exist(entry_oqc.get().strip(), OQC_PATH, current_user, code, name, "oqc_checklist")
 
-                if d_file: log_activity(db_name, current_user, "upload", d_file, module="SOP資訊")
-                if a_file: log_activity(db_name, current_user, "upload", a_file, module="SOP資訊")
-                if t_file: log_activity(db_name, current_user, "upload", t_file, module="SOP資訊")
-                if p_file: log_activity(db_name, current_user, "upload", p_file, module="SOP資訊")
-                if o_file: log_activity(db_name, current_user, "upload", o_file, module="SOP資訊")
+                if d_file: log_activity(user=current_user, action="upload", filename=d_file, module="SOP資訊")
+                if a_file: log_activity(user=current_user, action="upload", filename=a_file, module="SOP資訊")
+                if t_file: log_activity(user=current_user, action="upload", filename=t_file, module="SOP資訊")
+                if p_file: log_activity(user=current_user, action="upload", filename=p_file, module="SOP資訊")
+                if o_file: log_activity(user=current_user, action="upload", filename=o_file, module="SOP資訊")
 
                 cursor.execute("""
                     INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
@@ -762,7 +735,6 @@ def create_main_interface(root, db_name, login_info):
             tk.Button(form, text="新增紀錄", command=save_data, bg="lightblue",
                       state="normal" if can_add else "disabled").grid(row=7, column=1, pady=10)
 
-    # 查詢列
     query_frame = tk.Frame(frame)
     query_frame.pack(fill="x", padx=10, pady=5)
 
@@ -813,7 +785,7 @@ def create_main_interface(root, db_name, login_info):
         for row in tree.get_children():
             tree.delete(row)
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             base_query = """
                 SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at
@@ -846,7 +818,6 @@ def create_main_interface(root, db_name, login_info):
             cursor.execute(final_query, params)
             rows = cursor.fetchall()
 
-            # 讀取 bypass 欄位狀態
             bypass_fields = [
                 "dip_sop_bypass",
                 "assembly_sop_bypass",
@@ -861,7 +832,6 @@ def create_main_interface(root, db_name, login_info):
                 product_name = row_display[1]
                 timestamp = row_display[8]
 
-                # 將 sop 檔名轉顯示名稱（並依 bypass 標記）
                 for i in range(2, 7):
                     sop_file = row_display[i]
                     if sop_file:
@@ -905,7 +875,7 @@ def create_main_interface(root, db_name, login_info):
             if not target_field:
                 return
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
-            with FH.get_conn(DB_NAME) as conn:
+            with get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute(f"SELECT {target_field} FROM issues WHERE product_code=?", (product_code,))
                 result = cursor.fetchone()
@@ -933,15 +903,15 @@ def create_main_interface(root, db_name, login_info):
     tree.bind("<Control-c>", on_copy)
 
     def toggle_bypass(product_code, field_name, bypass_field):
-        with FH.get_conn(DB_NAME) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
             current = cursor.fetchone()
             new_value = 0 if current and current[0] else 1
             cursor.execute(f"UPDATE issues SET {bypass_field}=? WHERE product_code=?", (new_value, product_code))
             conn.commit()
-        # [修改] 記錄啟用/停用行為到操作紀錄
-        log_activity(DB_NAME, current_user, "toggle_bypass", f"{product_code}:{field_name}", module="SOP資訊")
+
+        log_activity(user=current_user, action="toggle_bypass", filename=f"{product_code}:{field_name}", module="SOP資訊")
         query_data()
 
     def on_right_click(event):
@@ -952,6 +922,7 @@ def create_main_interface(root, db_name, login_info):
         if not item or not col:
             return
         col_index = int(col[1:]) - 1
+
         if col_index not in range(2, 7):
             return
 
@@ -977,7 +948,7 @@ def create_main_interface(root, db_name, login_info):
                 return
             if messagebox.askyesno("確認", "確定要刪除選取的資料？此操作無法復原。"):
                 deleted_codes = []
-                with FH.get_conn(db_name) as conn:
+                with get_conn() as conn:
                     cursor = conn.cursor()
                     for item in selected_items:
                         product_code = str(tree.item(item)['values'][0]).zfill(8)
@@ -985,7 +956,7 @@ def create_main_interface(root, db_name, login_info):
                         deleted_codes.append(product_code)
                     conn.commit()
                 for code in deleted_codes:
-                    log_activity(DB_NAME, current_user, "delete", code, module="SOP資訊")
+                    log_activity(user=current_user, action="delete", filename=code, module="SOP資訊")
                 query_data()
 
         delete_frame = tk.Frame(frame)
@@ -1032,7 +1003,7 @@ def open_password_change_window(parent, db_name, username):
         old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
         new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (username, old_hash))
             if not cursor.fetchone():
@@ -1051,11 +1022,23 @@ if __name__ == "__main__":
         messagebox.showerror("錯誤", "本程式已在執行中，請勿重複開啟。")
         sys.exit()
 
-    init_db()
-    initialize_database()
     login_info = login()
 
     if login_info and login_info.get("user"):
+        current_role = login_info["role"]
+
+        init_db(current_role)
+        initialize_database()
+
+        if current_role in ("admin", "engineer"):
+            ensure_changelog_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
+            ensure_fixture_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
+            auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=VERBOSE_SCHEMA_CHECK)
+            ensure_stock_consistency()
+
+            if VERBOSE_SCHEMA_CHECK:
+                print_tables_info(DB_NAME)
+
         root = tk.Tk()
         root.title("生產管理平台")
         root.geometry("1200x750")
@@ -1107,11 +1090,12 @@ if __name__ == "__main__":
         logout_btn = tk.Button(top_bar, text="登出並關閉", command=lambda: logout_and_exit(root), bg="orange")
         logout_btn.pack(side="right", padx=10, pady=5)
 
-        change_pw_btn = tk.Button(
-            top_bar, text="變更密碼", bg="lightgreen",
-            command=lambda: open_password_change_window(root, DB_NAME, login_info["user"])
-        )
-        change_pw_btn.pack(side="right", padx=10, pady=(0, 0))
+        if current_role in ("admin", "engineer"):
+            change_pw_btn = tk.Button(
+                top_bar, text="變更密碼", bg="lightgreen",
+                command=lambda: open_password_change_window(root, DB_NAME, login_info["user"])
+            )
+            change_pw_btn.pack(side="right", padx=10, pady=(0, 0))
 
         user_info = f"使用者：{login_info['user']}（{login_info['role']}）"
         tk.Label(top_bar, text=user_info).pack(side="right", padx=10)

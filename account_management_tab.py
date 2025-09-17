@@ -6,7 +6,7 @@ import re
 from tkinter import ttk, messagebox
 from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
-import fixture_helper as FH
+from db_helper import get_conn
 
 def build_user_management_tab(tab, db_name, current_user):
 
@@ -51,7 +51,7 @@ def build_user_management_tab(tab, db_name, current_user):
     def refresh_users():
         for row in tree.get_children():
             tree.delete(row)
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             sql = """SELECT username, role, can_add, can_delete, active,
                 can_upload_sop, can_view_logs, can_delete_logs,
@@ -136,7 +136,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
         hashed_pw = hash_password(new_pw)
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users WHERE username=?", (new_user,))
             if cursor.fetchone():
@@ -151,8 +151,7 @@ def build_user_management_tab(tab, db_name, current_user):
             conn.commit()
 
         messagebox.showinfo("成功", "使用者已新增")
-        log_activity(db_name, current_user["user"], "add_user", new_user, module="帳號管理")
-
+        log_activity(user=current_user["user"], action="add_user", filename=new_user, module="帳號管理")
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)
         for k, v in permission_vars.items():
@@ -196,7 +195,7 @@ def build_user_management_tab(tab, db_name, current_user):
         entry_edit_user.insert(0, username)
         role_edit.set(item[1])
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
             specialty = cursor.fetchone()
@@ -230,7 +229,7 @@ def build_user_management_tab(tab, db_name, current_user):
         specialty = edit_specialty.get()
         permissions = {k: v.get() for k, v in permission_vars.items()}
 
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
 
             if new_username and new_username != original_username:
@@ -276,7 +275,7 @@ def build_user_management_tab(tab, db_name, current_user):
             conn.commit()
 
         messagebox.showinfo("成功", "已更新")
-        log_activity(db_name, current_user["user"], "update_user", original_username)
+        log_activity(user=current_user["user"], action="update_user", filename=original_username, module="帳號管理")
         entry_edit_user.delete(0, tk.END)
         entry_edit_pass.delete(0, tk.END)
         refresh_users()
@@ -291,12 +290,12 @@ def build_user_management_tab(tab, db_name, current_user):
             messagebox.showerror("錯誤", "無法刪除自己")
             return
         if messagebox.askyesno("確認", f"是否確定要刪除帳號「{username}」？"):
-            with FH.get_conn(db_name) as conn:
+            with get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute("DELETE FROM users WHERE username=?", (username,))
                 conn.commit()
             messagebox.showinfo("成功", "使用者已刪除")
-            log_activity(db_name, current_user["user"], "delete_user", username)
+            log_activity(user=current_user["user"], action="delete_user", filename=username, module="帳號管理")
             refresh_users()
 
     tk.Button(edit_frame, text="更新權限", command=update_user).grid(row=5, column=1, pady=5)

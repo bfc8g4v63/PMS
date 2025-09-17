@@ -7,8 +7,7 @@ from tkinter import messagebox
 from datetime import datetime
 import threading
 import functools
-import fixture_helper as FH  # 統一由 FH.get_conn() 取得連線
-
+from db_helper import get_conn
 
 def open_file(filepath):
     try:
@@ -37,9 +36,9 @@ ACTION_MAP = {
 }
 
 def log_activity(user, action, filename, module=None):
-    """統一記錄操作日誌：採用 FH.get_conn，無額外 checkpoint。"""
+
     action = ACTION_MAP.get(action, action)
-    with FH.get_conn() as conn:
+    with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """

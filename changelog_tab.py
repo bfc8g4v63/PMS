@@ -6,7 +6,7 @@ from datetime import datetime
 import re
 
 from schema_helper import get_next_changelog_version
-import fixture_helper as FH
+from db_helper import get_conn
 
 def build_changelog_tab(tab, current_role, db_name):
     frame = ttk.Frame(tab)
@@ -53,7 +53,7 @@ def build_changelog_tab(tab, current_role, db_name):
             if (major, minor, patch) < (1, 0, 0):
                 add_button.config(state=tk.DISABLED)
                 return
-            with FH.get_conn(db_name) as conn:
+            with get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT COUNT(*) FROM changelog WHERE version = ?", (version,))
                 exists = cursor.fetchone()[0] > 0
@@ -95,7 +95,7 @@ def build_changelog_tab(tab, current_role, db_name):
                 messagebox.showerror("版本跳號", f"不可以跳版。下一個合法版本應該是 {expected}")
                 return
             try:
-                with FH.get_conn(db_name) as conn:
+                with get_conn() as conn:
                     cursor = conn.cursor()
                     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     cursor.execute(
@@ -118,7 +118,7 @@ def build_changelog_tab(tab, current_role, db_name):
             if not version or not content:
                 messagebox.showwarning("欄位缺漏", "請輸入版本與內容")
                 return
-            with FH.get_conn(db_name) as conn:
+            with get_conn() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
                     "UPDATE changelog SET content = ? WHERE version = ?",
@@ -141,7 +141,7 @@ def build_changelog_tab(tab, current_role, db_name):
             version = item["values"][0]
             confirm = messagebox.askyesno("確認刪除", f"是否刪除版本 {version}？")
             if confirm:
-                with FH.get_conn(db_name) as conn:
+                with get_conn() as conn:
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM changelog WHERE version = ?", (version,))
                     conn.commit()
@@ -167,7 +167,7 @@ def build_changelog_tab(tab, current_role, db_name):
 
     def refresh_changelog():
         tree.delete(*tree.get_children())
-        with FH.get_conn(db_name) as conn:
+        with get_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT version, date, content FROM changelog ORDER BY rowid DESC")
             for row in cursor.fetchall():

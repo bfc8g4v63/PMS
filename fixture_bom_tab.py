@@ -1,110 +1,103 @@
 #$ fixture_bom_tab.py
-#% GUI 分頁「治具 BOM」
+#% GUI 分頁「治具 BOM 管理」
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (
     get_bom_by_part,
     add_bom_item,
-    delete_bom_item
+    delete_bom_item,
+    get_fixture_by_part_no
 )
 
-def build_fixture_bom_tab(parent: tk.Widget, current_user: str) -> tk.Frame:
-    root = tk.Frame(parent)
-    root.pack(fill="both", expand=True)
+def build_fixture_bom_tab(parent, current_user=None):
+    frame = ttk.Frame(parent)
+    frame.pack(fill="both", expand=True)
 
-    top = tk.Frame(root)
-    top.pack(fill="x", padx=8, pady=6)
+    form = ttk.LabelFrame(frame, text="治具 BOM 操作")
+    form.pack(fill="x", padx=5, pady=5)
 
-    part_var = tk.StringVar()
-    tk.Label(top, text="料號(8/12碼)").grid(row=0, column=0, sticky="w")
-    tk.Entry(top, textvariable=part_var, width=24).grid(row=0, column=1, padx=(6, 12))
-    btn_query = tk.Button(top, text="查詢", width=8)
-    btn_query.grid(row=0, column=2, padx=4)
-    btn_reset = tk.Button(top, text="重置", width=8)
-    btn_reset.grid(row=0, column=3, padx=4)
+    ttk.Label(form, text="主料號:").grid(row=0, column=0, padx=3, pady=2, sticky="e")
+    entry_parent = ttk.Entry(form, width=20)
+    entry_parent.grid(row=0, column=1, padx=3, pady=2)
 
-    mid = ttk.LabelFrame(root, text="BOM 清單")
-    mid.pack(fill="both", expand=True, padx=8, pady=6)
+    ttk.Label(form, text="子料號:").grid(row=1, column=0, padx=3, pady=2, sticky="e")
+    entry_child = ttk.Entry(form, width=20)
+    entry_child.grid(row=1, column=1, padx=3, pady=2)
 
-    columns = ("bom_id", "child_part_no", "quantity")
-    tree = ttk.Treeview(mid, columns=columns, show="headings")
-    tree.heading("bom_id", text="ID")
-    tree.heading("child_part_no", text="治具料號")
-    tree.heading("quantity", text="數量")
+    ttk.Label(form, text="數量:").grid(row=2, column=0, padx=3, pady=2, sticky="e")
+    entry_qty = ttk.Entry(form, width=20)
+    entry_qty.grid(row=2, column=1, padx=3, pady=2)
 
-    tree.column("bom_id", width=60, anchor="center")
-    tree.column("child_part_no", width=180, anchor="w")
-    tree.column("quantity", width=80, anchor="e")
+    tree = ttk.Treeview(frame, columns=("id","parent_part_no","child_part_no","qty"), show="headings")
+    tree.heading("id", text="ID")
+    tree.heading("parent_part_no", text="主料號")
+    tree.heading("child_part_no", text="子料號")
+    tree.heading("qty", text="數量")
 
-    vsb = ttk.Scrollbar(mid, orient="vertical", command=tree.yview)
-    tree.configure(yscrollcommand=vsb.set)
-    tree.pack(side="left", fill="both", expand=True)
-    vsb.pack(side="right", fill="y")
-
-    bottom = ttk.LabelFrame(root, text="新增 BOM 項目")
-    bottom.pack(fill="x", padx=8, pady=6)
-
-    bom_name_var = tk.StringVar()
-    bom_qty_var = tk.StringVar()
-    tk.Label(bottom, text="治具料號").grid(row=0, column=0, sticky="e", padx=4, pady=3)
-    tk.Entry(bottom, textvariable=bom_name_var, width=28).grid(row=0, column=1, padx=4, pady=3)
-    tk.Label(bottom, text="數量").grid(row=0, column=2, sticky="e", padx=4, pady=3)
-    tk.Entry(bottom, textvariable=bom_qty_var, width=8).grid(row=0, column=3, padx=4, pady=3)
-
-    btn_add = tk.Button(bottom, text="新增", width=10)
-    btn_add.grid(row=0, column=4, padx=6)
-    btn_del = tk.Button(bottom, text="刪除選取", width=10)
-    btn_del.grid(row=0, column=5, padx=6)
+    tree.column("id", width=60, anchor="center")
+    tree.column("parent_part_no", width=120, anchor="center")
+    tree.column("child_part_no", width=120, anchor="center")
+    tree.column("qty", width=80, anchor="center")
+    tree.pack(fill="both", expand=True, padx=5, pady=5)
 
     def refresh_tree():
+        tree.delete(*tree.get_children())
+        parent_no = entry_parent.get().strip()
+        if not parent_no:
+            return
         try:
-            part = part_var.get().strip()
-            if not part:
-                raise ValueError("請輸入料號後再查詢")
-            if len(part) not in (8, 12) or not part.isdigit():
-                raise ValueError("料號必須為 8 或 12 碼數字")
-            for i in tree.get_children():
-                tree.delete(i)
-            rows = get_bom_by_part(part)
-            for row in rows:
-                tree.insert("", "end", values=(row[0], row[1], row[2]))
+            rows = get_bom_by_part(parent_no)
+            for r in rows:
+                tree.insert("", "end", values=r)
         except Exception as e:
-            messagebox.showerror("查詢失敗", str(e))
+            messagebox.showerror("錯誤", str(e))
 
-    def on_add():
+    def on_add_bom():
+        parent_no = entry_parent.get().strip()
+        child_no = entry_child.get().strip()
+        qty_str = entry_qty.get().strip()
+        if not (parent_no and child_no and qty_str):
+            messagebox.showerror("錯誤", "主料號 / 子料號 / 數量 不可為空")
+            return
         try:
-            part = part_var.get().strip()
-            name = bom_name_var.get().strip()
-            qty = int(bom_qty_var.get().strip())
-            if not part or not name or qty <= 0:
-                raise ValueError("請輸入完整資訊並確認數量為正整數")
-            if len(part) not in (8, 12) or not part.isdigit():
-                raise ValueError("料號必須為 8 或 12 碼數字")
-            add_bom_item(part, name, qty)
-            bom_name_var.set("")
-            bom_qty_var.set("")
+            qty = int(qty_str)
+            if qty <= 0:
+                messagebox.showerror("錯誤", "數量必須大於 0")
+                return
+        except:
+            messagebox.showerror("錯誤", "數量必須是整數")
+            return
+        if not get_fixture_by_part_no(parent_no):
+            messagebox.showerror("錯誤", f"主料號 {parent_no} 不存在於治具清單")
+            return
+        if not get_fixture_by_part_no(child_no):
+            messagebox.showerror("錯誤", f"子料號 {child_no} 不存在於治具清單")
+            return
+        try:
+            add_bom_item(parent_no, child_no, qty)
+            messagebox.showinfo("完成", f"{parent_no} 新增 BOM 子料號 {child_no} x{qty}")
             refresh_tree()
+            entry_child.delete(0, tk.END)
+            entry_qty.delete(0, tk.END)
         except Exception as e:
-            messagebox.showerror("新增失敗", str(e))
+            messagebox.showerror("錯誤", str(e))
 
-    def on_delete():
+    def on_delete_bom():
         sel = tree.selection()
         if not sel:
-            messagebox.showwarning("提示", "請先選取要刪除的項目")
             return
-        for item in sel:
-            bom_id = tree.item(item, "values")[0]
-            delete_bom_item(bom_id)
-        refresh_tree()
+        bom_id = tree.item(sel[0], "values")[0]
+        if not messagebox.askyesno("確認", f"確定刪除 BOM ID={bom_id}？"):
+            return
+        try:
+            delete_bom_item(int(bom_id))
+            messagebox.showinfo("完成", f"BOM ID {bom_id} 已刪除")
+            refresh_tree()
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
 
-    def on_reset():
-        part_var.set("")
-        for i in tree.get_children():
-            tree.delete(i)
-
-    btn_query.configure(command=refresh_tree)
-    btn_reset.configure(command=on_reset)
-    btn_add.configure(command=on_add)
-    btn_del.configure(command=on_delete)
-
-    return root
+    btn_frame = ttk.Frame(form)
+    btn_frame.grid(row=0, column=2, rowspan=3, padx=5, pady=2, sticky="ns")
+    ttk.Button(btn_frame, text="查詢 BOM", command=refresh_tree).pack(fill="x", pady=2)
+    ttk.Button(btn_frame, text="新增子料", command=on_add_bom).pack(fill="x", pady=2)
+    ttk.Button(btn_frame, text="刪除子料", command=on_delete_bom).pack(fill="x", pady=2)

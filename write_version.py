@@ -8,17 +8,13 @@ timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 content = f"{__version__} - built at {timestamp}"
 
-# 在地端路徑
 LOCAL_FILE = "version.txt"
 
-# 雲端路徑
 CLOUD_FILE = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\version.txt"
 
-# 輸出在地端
 with open(LOCAL_FILE, "w", encoding="utf-8") as f:
     f.write(content)
 
-# 輸出到雲端
 try:
     os.makedirs(os.path.dirname(CLOUD_FILE), exist_ok=True)
     with open(CLOUD_FILE, "w", encoding="utf-8") as f:
