@@ -1,5 +1,6 @@
-### migrate_db.py
-## 資料庫結構修正腳本
+# migrate_db.py
+# SQLite 資料表欄位修正工具
+
 import sqlite3
 import os
 import shutil
@@ -30,9 +31,7 @@ def migrate():
     # fixtures
     cur.execute("PRAGMA table_info(fixtures)")
     cols = [r[1] for r in cur.fetchall()]
-    expected_cols = {"part_no","part_name","part_spec","part_group",
-                     "unit_price_ntd","unit_price_usd","safety_stock","storage_location"}
-    if set(cols) != expected_cols:
+    if "created_at" in cols:
         recreate_table(
             cur,
             "fixtures",
@@ -64,8 +63,7 @@ def migrate():
     # warehouse_stock
     cur.execute("PRAGMA table_info(warehouse_stock)")
     cols = [r[1] for r in cur.fetchall()]
-    expected_cols = {"part_no","warehouse","usable_qty","safety_stock"}
-    if set(cols) != expected_cols:
+    if "qty" in cols:
         recreate_table(
             cur,
             "warehouse_stock",
@@ -83,8 +81,9 @@ def migrate():
             INSERT INTO warehouse_stock (part_no, warehouse, usable_qty, safety_stock)
             """,
             select_sql="""
-            SELECT part_no, warehouse, qty as usable_qty, safety_stock
+            SELECT part_no, warehouse, SUM(qty) as usable_qty, MAX(safety_stock)
             FROM warehouse_stock_old
+            GROUP BY part_no, warehouse
             """
         )
 
@@ -119,8 +118,7 @@ def migrate():
     # users
     cur.execute("PRAGMA table_info(users)")
     cols = [r[1] for r in cur.fetchall()]
-    expected_cols = {"username","password","role","specialty",
-                     "can_view_logs","can_delete_logs","can_upload_sop","can_view_issues","can_manage_users"}
+    expected_cols = {"username","password","role","specialty","can_view_logs","can_delete_logs","can_upload_sop","can_view_issues","can_manage_users"}
     if set(cols) != expected_cols:
         recreate_table(
             cur,
@@ -177,7 +175,7 @@ def migrate():
     # transfer_logs
     cur.execute("PRAGMA table_info(transfer_logs)")
     cols = [r[1] for r in cur.fetchall()]
-    expected_cols = {"id","part_no","from_wh","to_wh","transfer_qty","user","created_at","remark"}
+    expected_cols = {"id","part_no","from_wh","to_wh","transfer_qty","user","remark","created_at"}
     if set(cols) != expected_cols:
         recreate_table(
             cur,
@@ -198,7 +196,7 @@ def migrate():
             INSERT INTO transfer_logs (id, part_no, from_wh, to_wh, transfer_qty, user, remark, created_at)
             """,
             select_sql="""
-            SELECT id, part_no, from_wh, to_wh, qty as transfer_qty, user, remark, timestamp as created_at
+            SELECT id, part_no, from_wh, to_wh, usable_qty AS transfer_qty, user, remark, timestamp AS created_at
             FROM transfer_logs_old
             """
         )
@@ -206,7 +204,7 @@ def migrate():
     # consumption_logs
     cur.execute("PRAGMA table_info(consumption_logs)")
     cols = [r[1] for r in cur.fetchall()]
-    expected_cols = {"id","part_no","warehouse","consume_qty","user","created_at","remark"}
+    expected_cols = {"id","part_no","warehouse","consume_qty","user","remark","created_at"}
     if set(cols) != expected_cols:
         recreate_table(
             cur,
@@ -226,7 +224,7 @@ def migrate():
             INSERT INTO consumption_logs (id, part_no, warehouse, consume_qty, user, remark, created_at)
             """,
             select_sql="""
-            SELECT id, part_no, warehouse, qty as consume_qty, user, remark, timestamp as created_at
+            SELECT id, part_no, warehouse, usable_qty AS consume_qty, user, remark, timestamp AS created_at
             FROM consumption_logs_old
             """
         )

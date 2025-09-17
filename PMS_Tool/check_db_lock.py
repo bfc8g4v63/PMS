@@ -1,3 +1,5 @@
+#$ check_db_lock.py
+#%  檢查 SQLite 資料庫是否被鎖定 
 import sqlite3
 import socket
 import sys

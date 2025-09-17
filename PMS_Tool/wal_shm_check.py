@@ -1,3 +1,5 @@
+#$ wal_shm_check.py
+#% 檢查 SQLite 資料庫及其 WAL/SHM 檔案是否被其他程序佔用
 import os
 import psutil
 

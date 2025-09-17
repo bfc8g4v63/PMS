@@ -1,5 +1,5 @@
-#$ cleanup_schema.py
-#%
+#$ cleanup_column.py
+#% 清理 SQLite 資料庫中多餘或錯誤的欄位，並修正資料表結構
 import sqlite3
 import os
 import shutil

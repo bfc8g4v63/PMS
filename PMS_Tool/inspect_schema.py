@@ -1,5 +1,5 @@
-# inspect_schema.py
-# 列出所有資料表與其欄位結構
+#$ inspect_schema.py
+#% 列出所有資料表與其欄位結構
 
 import sqlite3
 import os

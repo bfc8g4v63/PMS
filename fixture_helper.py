@@ -38,7 +38,7 @@ def ensure_schemas():
         CREATE TABLE IF NOT EXISTS warehouse_stock (
             part_no TEXT,
             warehouse TEXT,
-            qty INTEGER DEFAULT 0,
+            usable_qty INTEGER DEFAULT 0,
             safety_stock INTEGER DEFAULT 0,
             PRIMARY KEY (part_no, warehouse),
             FOREIGN KEY (part_no) REFERENCES fixtures(part_no) ON DELETE CASCADE
@@ -48,7 +48,7 @@ def ensure_schemas():
         CREATE TABLE IF NOT EXISTS transfer_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             part_no TEXT,
-            qty INTEGER,
+            transfer_qty INTEGER,
             from_wh TEXT,
             to_wh TEXT,
             user TEXT,
@@ -60,7 +60,7 @@ def ensure_schemas():
         CREATE TABLE IF NOT EXISTS consumption_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             part_no TEXT,
-            qty INTEGER,
+            consume_qty INTEGER,
             warehouse TEXT,
             user TEXT,
             line TEXT,
@@ -82,19 +82,22 @@ def ensure_schemas():
 def ensure_stock_consistency():
     with tx() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT part_no, safety_stock FROM fixtures")
+        cur.execute("SELECT part_no, safety_stock, storage_location FROM fixtures")
         rows = cur.fetchall()
-        for part_no, safety in rows:
+        for part_no, safety, location in rows:
             for wh in CORE_WAREHOUSES:
                 ss = safety if wh == "虹堡" else 0
+                loc = location if wh == "虹堡" else ""
                 cur.execute("""
-                    INSERT OR IGNORE INTO warehouse_stock(part_no, warehouse, qty, safety_stock)
+                    INSERT OR IGNORE INTO warehouse_stock(part_no, warehouse, usable_qty, safety_stock)
                     VALUES (?,?,0,?)
                 """, (part_no, wh, ss))
         conn.commit()
 
 def insert_fixture(part_no, name, spec, category, unit_price_ntd, safety_stock, location,
                    unit_price_usd=0.0):
+    if location:
+        location = validate_location(part_no, location)
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -108,8 +111,8 @@ def insert_fixture(part_no, name, spec, category, unit_price_ntd, safety_stock, 
         for wh in CORE_WAREHOUSES:
             ss = safety_stock if wh == "虹堡" else 0
             cur.execute("""
-            INSERT OR REPLACE INTO warehouse_stock(part_no, warehouse, qty, safety_stock)
-            VALUES (?,?,COALESCE((SELECT qty FROM warehouse_stock WHERE part_no=? AND warehouse=?),0),?)
+            INSERT OR REPLACE INTO warehouse_stock(part_no, warehouse, usable_qty, safety_stock)
+            VALUES (?,?,COALESCE((SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?),0),?)
             """, (part_no, wh, part_no, wh, ss))
 
 def delete_fixture(part_no):
@@ -125,6 +128,8 @@ def delete_fixture(part_no):
 def update_fixture(part_no, **kwargs):
     if not kwargs:
         return
+    if "storage_location" in kwargs and kwargs["storage_location"]:
+        kwargs["storage_location"] = validate_location(part_no, kwargs["storage_location"])
     cols, vals = [], []
     for k, v in kwargs.items():
         cols.append(f"{k}=?")
@@ -136,13 +141,15 @@ def update_fixture(part_no, **kwargs):
         if "safety_stock" in kwargs:
             cur.execute("UPDATE warehouse_stock SET safety_stock = 0 WHERE part_no=? AND warehouse <> '虹堡'", (part_no,))
             cur.execute("UPDATE warehouse_stock SET safety_stock = ? WHERE part_no=? AND warehouse = '虹堡'", (kwargs["safety_stock"], part_no))
+        if "storage_location" in kwargs:
+            cur.execute("UPDATE fixtures SET storage_location='' WHERE part_no=? AND storage_location IS NOT NULL AND storage_location<>'' AND (SELECT warehouse FROM warehouse_stock WHERE part_no=? LIMIT 1) <> '虹堡'", (part_no, part_no))
 
 def add_stock(part_no, qty, warehouse, user="", remark=""):
     if qty <= 0:
         raise ValueError("入庫量必須大於0")
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("UPDATE warehouse_stock SET qty = qty + ? WHERE part_no=? AND warehouse=?",
+        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
                     (qty, part_no, warehouse))
         conn.commit()
 
@@ -151,17 +158,17 @@ def transfer_stock(part_no, qty, from_wh, to_wh, user="", remark=""):
         raise ValueError("調撥量必須大於0")
     with tx() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
+        cur.execute("SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
                     (part_no, from_wh))
         row = cur.fetchone()
         if not row or row[0] < qty:
             raise ValueError("來源倉庫數量不足")
-        cur.execute("UPDATE warehouse_stock SET qty = qty - ? WHERE part_no=? AND warehouse=?",
+        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty - ? WHERE part_no=? AND warehouse=?",
                     (qty, part_no, from_wh))
-        cur.execute("UPDATE warehouse_stock SET qty = qty + ? WHERE part_no=? AND warehouse=?",
+        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
                     (qty, part_no, to_wh))
         cur.execute("""
-        INSERT INTO transfer_logs(part_no, qty, from_wh, to_wh, user, remark)
+        INSERT INTO transfer_logs(part_no, transfer_qty, from_wh, to_wh, user, remark)
         VALUES (?,?,?,?,?,?)
         """, (part_no, qty, from_wh, to_wh, user, remark))
 
@@ -170,22 +177,22 @@ def consume_stock(part_no, qty, warehouse, user="", line="", purpose=""):
         raise ValueError("消耗量必須大於0")
     with tx() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
+        cur.execute("SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
                     (part_no, warehouse))
         row = cur.fetchone()
         if not row or row[0] < qty:
             raise ValueError("倉庫數量不足，無法消耗")
-        cur.execute("UPDATE warehouse_stock SET qty = qty - ? WHERE part_no=? AND warehouse=?",
+        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty - ? WHERE part_no=? AND warehouse=?",
                     (qty, part_no, warehouse))
         cur.execute("""
-        INSERT INTO consumption_logs(part_no, qty, warehouse, user, line, purpose)
+        INSERT INTO consumption_logs(part_no, consume_qty, warehouse, user, line, purpose)
         VALUES (?,?,?,?,?,?)
         """, (part_no, qty, warehouse, user, line, purpose))
 
 def get_stock(part_no, warehouse):
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
+        cur.execute("SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
                     (part_no, warehouse))
         row = cur.fetchone()
         return row[0] if row else 0
@@ -222,7 +229,7 @@ def get_overview_by_warehouse(warehouse):
                f.unit_price_usd, f.unit_price_ntd,
                CASE WHEN ?='虹堡' THEN f.safety_stock ELSE 0 END as safety_stock,
                CASE WHEN ?='虹堡' THEN f.storage_location ELSE '' END as storage_location,
-               s.qty
+               s.usable_qty
         FROM fixtures f
         JOIN warehouse_stock s ON f.part_no = s.part_no
         WHERE s.warehouse=?

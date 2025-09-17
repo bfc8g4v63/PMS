@@ -21,25 +21,6 @@ CATEGORIES = ["電腦設備類","載具類","治具類","板子類","主機類",
 
 WAREHOUSES = CORE_WAREHOUSES + ["消耗"]
 
-def storage_location(raw: str) -> str:
-    s = (raw or "").strip()
-    parts = s.split("-")
-    if len(parts) != 3:
-        raise ValueError("儲位格式必須為 車-層-位置，例如 1-1-1")
-    try:
-        car = int(parts[0])
-        layer = int(parts[1])
-        pos = int(parts[2])
-    except:
-        raise ValueError("儲位格式必須為數字，例如 1-1-1")
-    if not (1 <= car <= 9):
-        raise ValueError("車號必須介於 1~9")
-    if not (1 <= layer <= 4):
-        raise ValueError("層號必須介於 1~4")
-    if not (1 <= pos <= 50):
-        raise ValueError("位置必須介於 1~50")
-    return f"{car}-{layer}-{pos}"
-
 def build_fixture_tab(parent, current_user: str = None):
     frames, trees, total_labels, total_price_labels = {}, {}, {}, {}
 
@@ -80,8 +61,9 @@ def build_fixture_tab(parent, current_user: str = None):
             safety_val = int(safety or 0)
         except:
             messagebox.showerror("錯誤","單價或安全庫存格式錯誤"); return
+
         try:
-            loc_fmt = validate_location(part, loc_raw)
+            loc_fmt = validate_location(part, loc_raw) if loc_raw else ""
         except Exception as e:
             messagebox.showerror("錯誤", str(e)); return
 
@@ -179,7 +161,7 @@ def build_fixture_tab(parent, current_user: str = None):
         except:
             messagebox.showerror("錯誤","單價或安全庫存格式錯誤"); return
         try:
-            loc_fmt = validate_location(part, loc_raw)
+            loc_fmt = validate_location(part, loc_raw) if loc_raw else ""
         except Exception as e:
             messagebox.showerror("錯誤", str(e)); return
         try:
@@ -218,14 +200,14 @@ def build_fixture_tab(parent, current_user: str = None):
                 unit_price_usd = round((unit_price_usd or 0), 3)
                 total_price_item = round((unit_price_ntd or 0) * (qty or 0), 3)
 
-                est_qty = max((safety_stock or 0) - (qty or 0), 0)
+                est_qty = abs((safety_stock or 0) - (qty or 0))
                 est_cost = round(est_qty * (unit_price_ntd or 0), 3)
                 total_estimate_cost += est_cost
 
                 ws.append([
                     part_no,name,spec,part_group,
                     unit_price_usd,unit_price_ntd,total_price_item,
-                    location,safety_stock,qty,
+                    location if wh=="虹堡" else "", safety_stock if wh=="虹堡" else 0, qty,
                     est_qty,est_cost
                 ])
 
@@ -302,6 +284,7 @@ def refresh_fixture_tree(tree, warehouse, total_label=None, total_price_label=No
         qty = qty or 0
         total_price_item = round(unit_price_ntd * qty, 3)
         show_location = location if warehouse == "虹堡" else ""
+        show_safety = safety_stock if warehouse == "虹堡" else 0
         tree.insert(
             "",
             "end",
@@ -313,7 +296,7 @@ def refresh_fixture_tree(tree, warehouse, total_label=None, total_price_label=No
                 unit_price_usd,
                 unit_price_ntd,
                 total_price_item,
-                safety_stock,
+                show_safety,
                 show_location,
                 qty,
             ),

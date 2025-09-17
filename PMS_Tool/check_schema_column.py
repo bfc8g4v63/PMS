@@ -1,5 +1,5 @@
-### check_schema.py
-## 檢查 SQLite 資料庫中各資料表的結構是否符合預期
+# check_schema_column.py
+# 檢查 SQLite 資料庫中各資料表與欄位結構是否符合預期
 import sqlite3
 
 DB_PATH = r"C:\Nelson\Dev\GitHub\PMS\PMS.db"
@@ -37,6 +37,22 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table'")
+    all_tables = [r[0] for r in cur.fetchall()]
+    expected_tables = list(expected_schema.keys())
+
+    extra_tables = [t for t in all_tables if t not in expected_tables]
+    missing_tables = [t for t in expected_tables if t not in all_tables]
+
+    print("=== 資料表整體檢查 ===")
+    print("資料庫中所有表:", all_tables)
+    print("預期應存在表:", expected_tables)
+
+    if extra_tables:
+        print("多餘的資料表:", extra_tables)
+    if missing_tables:
+        print("缺少的資料表:", missing_tables)
+
     for table, exp_cols in expected_schema.items():
         print(f"\n=== {table} ===")
         try:
@@ -55,7 +71,7 @@ def main():
 
             if not missing and not extra:
                 print("✓ 結構正確")
-        except Exception as e:
+        except Exception:
             print("× 找不到資料表，預期欄位:", exp_cols)
 
     conn.close()

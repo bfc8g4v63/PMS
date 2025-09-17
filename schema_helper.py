@@ -14,15 +14,16 @@ def get_required_columns():
             "module": "TEXT"
         },
         "users": {
-            "can_add": "INTEGER DEFAULT 1",
-            "can_delete": "INTEGER DEFAULT 0",
-            "active": "INTEGER DEFAULT 1",
+            "role": "TEXT",
             "specialty": "TEXT",
+            "can_add": "INTEGER DEFAULT 0",
+            "can_delete": "INTEGER DEFAULT 0",
             "can_view_logs": "INTEGER DEFAULT 0",
             "can_delete_logs": "INTEGER DEFAULT 0",
             "can_upload_sop": "INTEGER DEFAULT 0",
             "can_view_issues": "INTEGER DEFAULT 0",
-            "can_manage_users": "INTEGER DEFAULT 0"
+            "can_manage_users": "INTEGER DEFAULT 0",
+            "active": "INTEGER DEFAULT 1"
         },
         "issues": {
             "product_code": "TEXT",
