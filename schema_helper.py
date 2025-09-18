@@ -100,12 +100,30 @@ def get_next_changelog_version(db_path=None):
         return "v1.0.0"
 
     major, minor, patch = max(triplets)
-    patch += 1
+
+    if patch < 9:
+        patch += 1
+    else:
+        patch = 0
+        if minor < 9:
+            minor += 1
+        else:
+            minor = 0
+            major += 1
+
     next_version = f"v{major}.{minor}.{patch}"
 
     existing = set(v for v in versions if pattern.match(v or ""))
     while next_version in existing:
-        patch += 1
+        if patch < 9:
+            patch += 1
+        else:
+            patch = 0
+            if minor < 9:
+                minor += 1
+            else:
+                minor = 0
+                major += 1
         next_version = f"v{major}.{minor}.{patch}"
 
     return next_version

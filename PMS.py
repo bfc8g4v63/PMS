@@ -238,11 +238,12 @@ def login():
     entry_pass = tk.Entry(login_window, show="*")
     entry_pass.pack()
 
-    tk.Button(login_window, text="登入", command=try_login).pack(pady=15)
+    login_btn = tk.Button(login_window, text="登入", command=try_login)
+    login_btn.pack(pady=15)
 
     entry_user.focus_set()
     entry_user.bind("<Return>", lambda e: entry_pass.focus_set())
-    entry_pass.bind("<Return>", lambda e: try_login())
+    entry_pass.bind("<Return>", lambda e: try_login() or "break")
 
     def on_close():
         login_window.destroy()

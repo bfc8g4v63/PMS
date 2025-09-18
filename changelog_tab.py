@@ -24,14 +24,18 @@ def build_changelog_tab(tab, current_role, db_name):
     entry_frame = ttk.Frame(frame)
     entry_frame.pack(fill="x", padx=10, pady=5)
 
-    version_entry = ttk.Entry(entry_frame)
-    content_entry = ttk.Entry(entry_frame, width=60)
+    version_entry = ttk.Entry(entry_frame, width=15)
+    date_entry = ttk.Entry(entry_frame, width=20)
+    content_entry = ttk.Entry(entry_frame, width=80)
     if current_role == "admin":
+
         ttk.Label(entry_frame, text="版本:").grid(row=0, column=0, sticky="e")
         version_entry.grid(row=0, column=1, sticky="w", padx=(5, 10))
-        ttk.Label(entry_frame, text="內容:").grid(row=0, column=2, sticky="e")
-        content_entry.grid(row=0, column=3, sticky="w", padx=(5, 10))
-
+        ttk.Label(entry_frame, text="時間:").grid(row=0, column=2, sticky="e")
+        date_entry.grid(row=0, column=3, sticky="w", padx=(5, 10))
+        ttk.Label(entry_frame, text="內容:").grid(row=1, column=3, sticky="e", pady=(5, 0))
+        content_entry.grid(row=1, column=4, columnspan=6, sticky="we", padx=(5, 10), pady=(5, 0))
+        
     status_var = tk.StringVar()
     status_label = ttk.Label(entry_frame, textvariable=status_var, foreground="blue")
     if current_role == "admin":
@@ -66,15 +70,19 @@ def build_changelog_tab(tab, current_role, db_name):
                 return
             add_button.config(state=tk.NORMAL)
 
-        def on_content_change(*args):
-            current = content_entry.get().strip()
-            if current == original_content["value"] or not version_entry.get().strip():
+        def on_field_change(*args):
+            current_content = content_entry.get().strip()
+            current_date = date_entry.get().strip()
+            if (
+                (current_content == original_content["value"] and current_date == original_content.get("date", "")) 
+                or not version_entry.get().strip()
+            ):
                 update_button.config(state=tk.DISABLED)
             else:
                 update_button.config(state=tk.NORMAL)
 
-        version_entry.bind("<KeyRelease>", validate_version)
-        content_entry.bind("<KeyRelease>", on_content_change)
+        content_entry.bind("<KeyRelease>", on_field_change)
+        date_entry.bind("<KeyRelease>", on_field_change)
 
         def insert_changelog():
             version = version_entry.get().strip()
@@ -95,14 +103,23 @@ def build_changelog_tab(tab, current_role, db_name):
                 messagebox.showerror("版本跳號", f"不可以跳版。下一個合法版本應該是 {expected}")
                 return
             try:
+                date_val = date_entry.get().strip()
+                if not date_val:
+                    date_val = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                else:
+                    try:
+                        datetime.strptime(date_val, "%Y-%m-%d %H:%M:%S")
+                    except ValueError:
+                        messagebox.showerror("時間格式錯誤", "時間必須是 YYYY-MM-DD HH:MM:SS 格式")
+                        return
                 with get_conn() as conn:
                     cursor = conn.cursor()
-                    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     cursor.execute(
                         "INSERT INTO changelog (version, date, content) VALUES (?, ?, ?)",
-                        (version, now, content),
+                        (version, date_val, content),
                     )
                     conn.commit()
+
             except Exception:
                 messagebox.showerror("版本重複", f"版本 {version} 已存在，請重新輸入")
                 return
@@ -120,10 +137,19 @@ def build_changelog_tab(tab, current_role, db_name):
                 return
             with get_conn() as conn:
                 cursor = conn.cursor()
+                date_val = date_entry.get().strip()
+                if not date_val:
+                    messagebox.showwarning("欄位缺漏", "請輸入時間")
+                    return
+                try:
+                    datetime.strptime(date_val, "%Y-%m-%d %H:%M:%S")
+                except ValueError:
+                    messagebox.showerror("時間格式錯誤", "時間必須是 YYYY-MM-DD HH:MM:SS 格式")
+                    return
                 cursor.execute(
-                    "UPDATE changelog SET content = ? WHERE version = ?",
-                    (content, version),
-                )
+                    "UPDATE changelog SET content = ?, date = ? WHERE version = ?",
+                    (content, date_val, version),
+)
                 conn.commit()
             refresh_changelog()
             messagebox.showinfo("更新成功", f"版本 {version} 的內容已更新")
@@ -154,16 +180,16 @@ def build_changelog_tab(tab, current_role, db_name):
             validate_version()
 
         auto_button = ttk.Button(entry_frame, text="自動產生版本", command=fill_next_version)
-        auto_button.grid(row=0, column=4, padx=(10, 0), sticky="w")
+        auto_button.grid(row=0, column=4, padx=10, sticky="w")
 
         add_button = ttk.Button(entry_frame, text="新增紀錄", command=insert_changelog, state=tk.DISABLED)
-        add_button.grid(row=0, column=5, padx=(10, 0), sticky="w")
+        add_button.grid(row=0, column=5, padx=10, sticky="w")
 
         update_button = ttk.Button(entry_frame, text="儲存修改", command=update_changelog, state=tk.DISABLED)
-        update_button.grid(row=0, column=6, padx=(10, 0), sticky="w")
+        update_button.grid(row=0, column=6, padx=10, sticky="w")
 
         delete_button = ttk.Button(entry_frame, text="刪除所選", command=delete_selected)
-        delete_button.grid(row=0, column=7, padx=(10, 0), sticky="w")
+        delete_button.grid(row=0, column=7, padx=10, sticky="w")
 
     def refresh_changelog():
         tree.delete(*tree.get_children())
@@ -181,8 +207,11 @@ def build_changelog_tab(tab, current_role, db_name):
             return
         values = tree.item(item, "values")
         version_entry.delete(0, tk.END)
+        date_entry.delete(0, tk.END)
         content_entry.delete(0, tk.END)
+
         version_entry.insert(0, values[0])
+        date_entry.insert(0, values[1])
         content_entry.insert(0, values[2])
         status_var.set(f"目前編輯中版本：{values[0]}")
         original_content["value"] = values[2]
