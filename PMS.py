@@ -224,7 +224,7 @@ def login():
 
     login_window = tk.Tk()
     login_window.title("登入系統")
-    login_window.geometry("300x180")
+    login_window.geometry("400x250")
     try:
         login_window.iconbitmap("PMS.ico")
     except:
@@ -274,10 +274,10 @@ def build_log_view_tab(tab, db_name, role):
     tree = ttk.Treeview(tab, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
-        tree.column("使用者", width=80)
-        tree.column("動作", width=60)
-        tree.column("檔案名稱", width=300)
-        tree.column("時間", width=80)
+        tree.column("使用者", width=60, anchor="center")
+        tree.column("動作", width=60, anchor="center")
+        tree.column("檔案名稱", width=500, anchor="center")
+        tree.column("時間", width=60, anchor="center")
     tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     def refresh_logs():
@@ -753,10 +753,20 @@ def create_main_interface(root, db_name, login_info):
 
     columns = ("料號", "品名", "DIP SOP", "組裝SOP", "測試SOP", "包裝SOP", "檢查表OQC", "使用者", "建立時間")
     tree = ttk.Treeview(frame, columns=columns, show="headings")
+
     for col in columns:
         tree.heading(col, text=col)
-        tree.column(col, width=120)
+        if col == "料號":
+            tree.column(col, width=60, anchor="center")
+        elif col == "品名":
+            tree.column(col, width=180, anchor="center")
+        elif col == "使用者":
+            tree.column(col, width=80, anchor="center")
+        else:
+            tree.column(col, width=120, anchor="center")
+
     tree.pack(fill="both", expand=True, padx=10, pady=5)
+
 
     sop_stats_var = tk.StringVar()
     sop_stats_label = tk.Label(frame, textvariable=sop_stats_var, anchor="w", fg="blue", font=("Arial", 10))

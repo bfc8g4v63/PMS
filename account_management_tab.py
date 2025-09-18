@@ -45,7 +45,7 @@ def build_user_management_tab(tab, db_name, current_user):
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
-        tree.column(col, width=100)
+        tree.column(col, width=100, anchor="center")
     tree.pack(fill="both", expand=True, pady=5)
 
     def refresh_users():
