@@ -73,7 +73,7 @@ def ensure_schemas():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             parent_part_no TEXT,
             child_part_no TEXT,
-            qty INTEGER,
+            bom_qty INTEGER,
             remark TEXT,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )
@@ -94,10 +94,10 @@ def ensure_stock_consistency():
                 """, (part_no, wh, ss))
         conn.commit()
 
-def insert_fixture(part_no, name, spec, category, unit_price_ntd, safety_stock, location,
+def insert_fixture(part_no, part_name, part_spec, part_group, unit_price_ntd, safety_stock, location,
                    unit_price_usd=0.0):
     if not location or safety_stock is None:
-        raise ValueError("新增治具必須包含儲位與安庫")
+        raise ValueError("建立治具必須包含儲位與安庫")
 
     if location:
         location = validate_location(part_no, location)
@@ -116,7 +116,7 @@ def insert_fixture(part_no, name, spec, category, unit_price_ntd, safety_stock, 
                              unit_price_ntd, unit_price_usd,
                              safety_stock, storage_location)
         VALUES (?,?,?,?,?,?,?,?)
-        """, (part_no, name, spec, category,
+        """, (part_no, part_name, part_spec, part_group,
               unit_price_ntd, unit_price_usd,
               safety_stock, location))
 
@@ -290,7 +290,7 @@ def get_bom_by_part(parent_part_no: str):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-        SELECT id, parent_part_no, child_part_no, qty, remark
+        SELECT id, parent_part_no, child_part_no, bom_qty, remark
         FROM fixture_boms
         WHERE parent_part_no=?
         ORDER BY id
@@ -303,17 +303,17 @@ def add_bom_item(parent_part_no: str, child_part_no: str, qty: int, remark: str 
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("""
-        SELECT id, qty FROM fixture_boms
+        SELECT id, bom_qty FROM fixture_boms
         WHERE parent_part_no=? AND child_part_no=?
         """, (parent_part_no, child_part_no))
         row = cur.fetchone()
         if row:
             new_qty = row[1] + qty
-            cur.execute("UPDATE fixture_boms SET qty=?, remark=? WHERE id=?",
+            cur.execute("UPDATE fixture_boms SET bom_qty=?, remark=? WHERE id=?",
                         (new_qty, remark, row[0]))
         else:
             cur.execute("""
-            INSERT INTO fixture_boms(parent_part_no, child_part_no, qty, remark)
+            INSERT INTO fixture_boms(parent_part_no, child_part_no, bom_qty, remark)
             VALUES (?,?,?,?)
             """, (parent_part_no, child_part_no, qty, remark))
 

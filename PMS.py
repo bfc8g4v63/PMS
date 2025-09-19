@@ -419,15 +419,6 @@ def initialize_database():
                 module TEXT
             )
         """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS dev_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                version TEXT,
-                content TEXT,
-                updated_at TEXT,
-                created_by TEXT
-            )
-        """)
         conn.commit()
 
     print("資料庫初始化完成，實際位置：", DB_NAME)

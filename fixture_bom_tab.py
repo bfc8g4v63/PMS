@@ -1,5 +1,5 @@
-#$ fixture_bom_tab.py
-#% GUI 分頁「治具 BOM 管理」
+# fixture_bom_tab.py
+# GUI 分頁「治具 BOM 管理」
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (
@@ -28,16 +28,16 @@ def build_fixture_bom_tab(parent, current_user=None):
     entry_qty = ttk.Entry(form, width=20)
     entry_qty.grid(row=2, column=1, padx=3, pady=2)
 
-    tree = ttk.Treeview(frame, columns=("id","parent_part_no","child_part_no","qty"), show="headings")
+    tree = ttk.Treeview(frame, columns=("id","parent_part_no","child_part_no","bom_qty"), show="headings")
     tree.heading("id", text="ID")
     tree.heading("parent_part_no", text="主料號")
     tree.heading("child_part_no", text="子料號")
-    tree.heading("qty", text="數量")
+    tree.heading("bom_qty", text="數量")
 
     tree.column("id", width=60, anchor="center")
     tree.column("parent_part_no", width=120, anchor="center")
     tree.column("child_part_no", width=120, anchor="center")
-    tree.column("qty", width=80, anchor="center")
+    tree.column("bom_qty", width=80, anchor="center")
     tree.pack(fill="both", expand=True, padx=5, pady=5)
 
     def refresh_tree():
@@ -48,7 +48,7 @@ def build_fixture_bom_tab(parent, current_user=None):
         try:
             rows = get_bom_by_part(parent_no)
             for r in rows:
-                tree.insert("", "end", values=r)
+                tree.insert("", "end", values=r[:4])
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 

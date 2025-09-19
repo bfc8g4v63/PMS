@@ -211,14 +211,14 @@ def ensure_fixture_schema(db_path=None, verbose=False):
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 parent_part_no TEXT,
                 child_part_no TEXT,
-                usable_qty INTEGER DEFAULT 1,
+                bom_qty INTEGER DEFAULT 1,
                 remark TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         add_col_if_missing(conn, "fixture_boms", "parent_part_no", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "child_part_no", "TEXT")
-        add_col_if_missing(conn, "fixture_boms", "usable_qty", "INTEGER DEFAULT 1")
+        add_col_if_missing(conn, "fixture_boms", "bom_qty", "INTEGER DEFAULT 1")
         add_col_if_missing(conn, "fixture_boms", "remark", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "created_at", "TIMESTAMP")
         if verbose:

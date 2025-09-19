@@ -4,7 +4,7 @@
 import sqlite3
 import os
 
-DB_PATH = r"C:\Nelson\Dev\GitHub\PMS\PMS.db"
+DB_PATH = r"C:\Nelson\Dev\GitHub\PMS_Document\PMS_Test_db\PMS_2509191550_cln_ok.db"
 
 def inspect_schema(db_path=DB_PATH):
     if not os.path.exists(db_path):

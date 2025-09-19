@@ -18,16 +18,16 @@
 
 * **治具管理模組**
 
-  * [x] 新增治具時自動生成四倉別資料
+  * [x] 建立治具時自動生成四倉別資料
   * [x] 新增料號驗證（長度 8 或 12 碼、必須為數字）
   * [x] 刪除後再新增相同料號，不會遺留舊數據
-  * [x] 入庫/轉倉/消耗功能完成，數量不得為負
+  * [x] 入庫/調撥/消耗功能完成，數量不得為負
   * [x] 入庫倉別依 Notebook 分頁自動判斷，不再用下拉選單
   * [x] 儲位規則：1-1-1 \~ 9-4-50，不補零；僅虹堡倉有安庫與儲位
   * [x] 四倉分頁 TreeView 獨立顯示，並於下方顯示總數統計
   * [x] 倉別加總顯示不重複料號
   * [x] 匯出 Excel 時新增預估請購量/金額與總金額統計
-  * [ ] 四大操作按鈕（新增/入庫/轉倉/消耗）尚待全面套用 @safe\_button\_action
+  * [ ] 四大操作按鈕（新增/入庫/調撥/消耗）尚待全面套用 @safe\_button\_action
   * [ ] 治具 BOM 分頁 UI 規劃中（後端 DB 已完成）
 
 * **帳號與權限模組**
@@ -168,9 +168,9 @@
               * [x] 治具單價
               * [x] 安全庫存
               * [x] 儲位
-            * [x] 新增治具
+            * [x] 建立治具
             * [x] 刪除治具
-            * [x] 轉倉調撥
+            * [x] 調撥
             * [x] 入庫（依分頁倉別）
             * [x] 消耗登記
             * [x] 匯出 EXCEL
@@ -258,7 +258,7 @@
 
     * [x] 料號：長度 8 或 12 碼，且為整數數字
     * [x] 入庫：依 Notebook 分頁自動判斷目標倉
-    * [x] 轉倉：來源倉 ≠ 目的倉，來源倉數量須足夠
+    * [x] 調撥：來源倉 ≠ 目的倉，來源倉數量須足夠
     * [x] 數量：任何操作後不得為負
     * [x] 單價：必須為正數
     * [x] 安全庫存：必須 ≥ 0（僅虹堡倉有效）
@@ -329,7 +329,7 @@
   * [x] activity\_logs：id, username, action, filename, timestamp, module
   * [x] transfer\_logs：id, part\_no, from\_wh, to\_wh, transfer\_qty, user, remark, created\_at
   * [x] consumption\_logs：id, part\_no, warehouse, consume\_qty, user, remark, created\_at
-  * [x] fixture\_boms：bom\_id, parent\_part\_no, child\_part\_no, description, qty, remark, created\_at（暫未於 UI 使用）
+  * [x] fixture\_boms：bom\_id, parent\_part\_no, child\_part\_no, qty, remark, created\_at（暫未於 UI 使用）
   * [x] changelog：version, date, content
 
 ---
