@@ -18,7 +18,7 @@ def build_changelog_tab(tab, current_role, db_name):
     tree.heading("content", text="內容")
     tree.column("version", width=100, anchor="center")
     tree.column("date", width=150, anchor="center")
-    tree.column("content", width=500, anchor="center")
+    tree.column("content", width=500)
     tree.pack(fill="both", expand=True, padx=10, pady=10)
 
     entry_frame = ttk.Frame(frame)

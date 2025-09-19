@@ -33,7 +33,7 @@ from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
 
-if USE_LOCAL_DB:
+if not USE_LOCAL_DB:
     DB_NAME = LOCAL_DB_PATH
 elif os.path.exists(Z_DRIVE_DB):
     DB_NAME = Z_DRIVE_DB
@@ -224,7 +224,7 @@ def login():
 
     login_window = tk.Tk()
     login_window.title("登入系統")
-    login_window.geometry("400x250")
+    login_window.geometry("300x260")
     try:
         login_window.iconbitmap("PMS.ico")
     except:
@@ -276,7 +276,7 @@ def build_log_view_tab(tab, db_name, role):
         tree.heading(col, text=col)
         tree.column("使用者", width=60, anchor="center")
         tree.column("動作", width=60, anchor="center")
-        tree.column("檔案名稱", width=500, anchor="center")
+        tree.column("檔案名稱", width=500)
         tree.column("時間", width=60, anchor="center")
     tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 

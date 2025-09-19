@@ -3,7 +3,7 @@
 import os
 from db_helper import set_db_path   # 改為由 db_helper 提供 DB_PATH 控制
 
-USE_LOCAL_DB = True                 # True: 使用本機資料庫；False: 使用網路資料庫
+USE_LOCAL_DB = False                # False: 使用本機資料庫；True: 使用網路資料庫
 ENABLE_AUTO_LOGOUT = False          # True: 啟用自動登出功能；False: 不啟用
 VERBOSE_SCHEMA_CHECK = False         # True: 啟用詳細的資料表結構檢查與補齊訊息；False: 關閉
 IDLE_TIMEOUT = 180                  # 自動登出閒置時間（秒），預設 3 分鐘

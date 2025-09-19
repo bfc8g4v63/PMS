@@ -96,10 +96,21 @@ def ensure_stock_consistency():
 
 def insert_fixture(part_no, name, spec, category, unit_price_ntd, safety_stock, location,
                    unit_price_usd=0.0):
+    if not location or safety_stock is None:
+        raise ValueError("新增治具必須包含儲位與安庫")
+
     if location:
         location = validate_location(part_no, location)
+
+    unit_price_usd = int(unit_price_usd * 1000) / 1000.0
+
     with tx() as conn:
         cur = conn.cursor()
+
+        cur.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
+        if cur.fetchone():
+            raise ValueError(f"治具料號 {part_no} 已存在，請勿重複新增")
+
         cur.execute("""
         INSERT INTO fixtures(part_no, part_name, part_spec, part_group,
                              unit_price_ntd, unit_price_usd,
@@ -108,6 +119,7 @@ def insert_fixture(part_no, name, spec, category, unit_price_ntd, safety_stock, 
         """, (part_no, name, spec, category,
               unit_price_ntd, unit_price_usd,
               safety_stock, location))
+
         for wh in CORE_WAREHOUSES:
             ss = safety_stock if wh == "虹堡" else 0
             cur.execute("""
@@ -128,21 +140,29 @@ def delete_fixture(part_no):
 def update_fixture(part_no, **kwargs):
     if not kwargs:
         return
-    if "storage_location" in kwargs and kwargs["storage_location"]:
-        kwargs["storage_location"] = validate_location(part_no, kwargs["storage_location"])
+
+    if "storage_location" in kwargs:
+        if kwargs["storage_location"]:
+            kwargs["storage_location"] = validate_location(part_no, kwargs["storage_location"])
+        else:
+            kwargs.pop("storage_location")
+
+    if "unit_price_usd" in kwargs and kwargs["unit_price_usd"] is not None:
+        kwargs["unit_price_usd"] = int(kwargs["unit_price_usd"] * 1000) / 1000.0
+
     cols, vals = [], []
     for k, v in kwargs.items():
         cols.append(f"{k}=?")
         vals.append(v)
     vals.append(part_no)
+
     with tx() as conn:
         cur = conn.cursor()
         cur.execute(f"UPDATE fixtures SET {','.join(cols)} WHERE part_no=?", vals)
+
         if "safety_stock" in kwargs:
             cur.execute("UPDATE warehouse_stock SET safety_stock = 0 WHERE part_no=? AND warehouse <> '虹堡'", (part_no,))
             cur.execute("UPDATE warehouse_stock SET safety_stock = ? WHERE part_no=? AND warehouse = '虹堡'", (kwargs["safety_stock"], part_no))
-        if "storage_location" in kwargs:
-            cur.execute("UPDATE fixtures SET storage_location='' WHERE part_no=? AND storage_location IS NOT NULL AND storage_location<>'' AND (SELECT warehouse FROM warehouse_stock WHERE part_no=? LIMIT 1) <> '虹堡'", (part_no, part_no))
 
 def add_stock(part_no, qty, warehouse, user="", remark=""):
     if qty <= 0:
