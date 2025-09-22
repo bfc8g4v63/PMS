@@ -41,7 +41,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Button(control_frame, text="↕排序帳號", command=toggle_sort).pack(side="left")
 
-    columns = ("帳號", "角色", "新增", "刪除", "啟用", "上傳SOP", "可見紀錄", "刪紀錄", "可見生產", "帳號管理")
+    columns = ("帳號", "角色", "新增", "刪除", "啟用", "上傳SOP", "可見紀錄", "刪除紀錄", "可見SOP", "帳號管理")
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
