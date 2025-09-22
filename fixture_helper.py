@@ -94,23 +94,22 @@ def ensure_stock_consistency():
                 """, (part_no, wh, ss))
         conn.commit()
 
-def insert_fixture(part_no, part_name, part_spec, part_group, unit_price_ntd, safety_stock, location,
+def insert_fixture(part_no, part_name, part_spec, part_group, unit_price_ntd, safety_stock, storage_location,
                    unit_price_usd=0.0):
-    if not location or safety_stock is None:
+    if not storage_location or safety_stock is None:
         raise ValueError("建立治具必須包含儲位與安庫")
-
-    if location:
-        location = validate_location(part_no, location)
 
     unit_price_usd = int(unit_price_usd * 1000) / 1000.0
 
     with tx() as conn:
         cur = conn.cursor()
-
         cur.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
         if cur.fetchone():
             raise ValueError(f"治具料號 {part_no} 已存在，請勿重複新增")
-
+        cur.execute("SELECT part_no FROM fixtures WHERE storage_location=?", (storage_location,))
+        conflict = cur.fetchone()
+        if conflict:
+            raise ValueError(f"儲位 {storage_location} 已被料號 {conflict[0]} 使用")
         cur.execute("""
         INSERT INTO fixtures(part_no, part_name, part_spec, part_group,
                              unit_price_ntd, unit_price_usd,
@@ -118,8 +117,7 @@ def insert_fixture(part_no, part_name, part_spec, part_group, unit_price_ntd, sa
         VALUES (?,?,?,?,?,?,?,?)
         """, (part_no, part_name, part_spec, part_group,
               unit_price_ntd, unit_price_usd,
-              safety_stock, location))
-
+              safety_stock, storage_location))
         for wh in CORE_WAREHOUSES:
             ss = safety_stock if wh == "虹堡" else 0
             cur.execute("""
@@ -137,32 +135,38 @@ def delete_fixture(part_no):
         cur.execute("DELETE FROM fixtures WHERE part_no = ?", (part_no,))
         conn.commit()
 
-def update_fixture(part_no, **kwargs):
-    if not kwargs:
-        return
-
-    if "storage_location" in kwargs:
-        if kwargs["storage_location"]:
-            kwargs["storage_location"] = validate_location(part_no, kwargs["storage_location"])
-        else:
-            kwargs.pop("storage_location")
-
-    if "unit_price_usd" in kwargs and kwargs["unit_price_usd"] is not None:
-        kwargs["unit_price_usd"] = int(kwargs["unit_price_usd"] * 1000) / 1000.0
-
-    cols, vals = [], []
-    for k, v in kwargs.items():
-        cols.append(f"{k}=?")
-        vals.append(v)
-    vals.append(part_no)
-
+def update_fixture(part_no, part_name=None, part_spec=None, part_group=None,
+                   unit_price_ntd=None, unit_price_usd=None,
+                   safety_stock=None, storage_location=None):
     with tx() as conn:
         cur = conn.cursor()
-        cur.execute(f"UPDATE fixtures SET {','.join(cols)} WHERE part_no=?", vals)
-
-        if "safety_stock" in kwargs:
-            cur.execute("UPDATE warehouse_stock SET safety_stock = 0 WHERE part_no=? AND warehouse <> '虹堡'", (part_no,))
-            cur.execute("UPDATE warehouse_stock SET safety_stock = ? WHERE part_no=? AND warehouse = '虹堡'", (kwargs["safety_stock"], part_no))
+        cur.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
+        if not cur.fetchone():
+            raise ValueError(f"治具料號 {part_no} 不存在，無法修改")
+        if not storage_location or storage_location.strip() == "":
+            raise ValueError("修改治具時儲位不可為空")
+        cur.execute("SELECT part_no FROM fixtures WHERE storage_location=? AND part_no<>?", (storage_location, part_no))
+        conflict = cur.fetchone()
+        if conflict:
+            raise ValueError(f"儲位 {storage_location} 已被料號 {conflict[0]} 使用")
+        if unit_price_usd is not None:
+            unit_price_usd = int(unit_price_usd * 1000) / 1000.0
+        cur.execute("""
+        UPDATE fixtures
+        SET part_name=?, part_spec=?, part_group=?,
+            unit_price_ntd=?, unit_price_usd=?,
+            safety_stock=?, storage_location=?
+        WHERE part_no=?
+        """, (part_name, part_spec, part_group,
+              unit_price_ntd, unit_price_usd,
+              safety_stock, storage_location, part_no))
+        for wh in CORE_WAREHOUSES:
+            ss = safety_stock if wh == "虹堡" else 0
+            cur.execute("""
+            UPDATE warehouse_stock
+            SET safety_stock=?
+            WHERE part_no=? AND warehouse=?
+            """, (ss, part_no, wh))
 
 def add_stock(part_no, qty, warehouse, user="", remark=""):
     if qty <= 0:
@@ -285,6 +289,41 @@ def validate_location(part_no: str, raw: str) -> str:
         if row:
             raise ValueError(f"儲位 {formatted} 已被料號 {row[0]} 使用")
     return formatted
+
+def generate_location(prefix: str):
+    with tx() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT storage_location FROM fixtures WHERE storage_location IS NOT NULL")
+        used = {row[0] for row in cur.fetchall()}
+
+    if not prefix:
+        for car in range(1, 10):
+            for level in range(1, 5):
+                for pos in range(1, 51):
+                    candidate = f"{car}-{level}-{pos}"
+                    if candidate not in used:
+                        return candidate
+        raise ValueError("所有儲位都已滿")
+
+    if prefix.isdigit():
+        car = prefix
+        for level in range(1, 5):
+            for pos in range(1, 51):
+                candidate = f"{car}-{level}-{pos}"
+                if candidate not in used:
+                    return candidate
+        raise ValueError(f"{car} 車已滿，無可用儲位")
+
+    parts = prefix.split("-")
+    if len(parts) == 2 and all(p.isdigit() for p in parts):
+        car, level = parts
+        for pos in range(1, 51):
+            candidate = f"{car}-{level}-{pos}"
+            if candidate not in used:
+                return candidate
+        raise ValueError(f"{car}-{level} 已滿，無可用儲位")
+
+    raise ValueError("輸入格式錯誤，請輸入 車號 或 車號-層數")
 
 def get_bom_by_part(parent_part_no: str):
     with get_conn() as conn:

@@ -12,6 +12,7 @@ from fixture_helper import (
     consume_stock,
     update_fixture,
     get_overview_by_warehouse,
+    generate_location,
     get_fixture_by_part_no,
     validate_location,
     CORE_WAREHOUSES
@@ -65,7 +66,7 @@ def build_fixture_tab(parent, current_user: str = None):
             messagebox.showerror("錯誤","單價或安全庫存格式錯誤"); return
 
         try:
-            loc_fmt = validate_location(part_no, loc_raw) if loc_raw else ""
+            loc_fmt = loc_raw
         except Exception as e:
             messagebox.showerror("錯誤", str(e)); return
 
@@ -164,7 +165,7 @@ def build_fixture_tab(parent, current_user: str = None):
         except:
             messagebox.showerror("錯誤","單價或安全庫存格式錯誤"); return
         try:
-            loc_fmt = validate_location(part_no, loc_raw) if loc_raw else ""
+            loc_fmt = loc_raw
         except Exception as e:
             messagebox.showerror("錯誤", str(e)); return
         try:
@@ -203,7 +204,10 @@ def build_fixture_tab(parent, current_user: str = None):
                 unit_price_usd = int((unit_price_usd or 0) * 1000) / 1000.0
                 total_price_item = int((unit_price_ntd or 0) * (usable_qty or 0) * 1000) / 1000.0
 
-                est_qty = abs((safety_stock or 0) - (usable_qty or 0))
+                if (safety_stock or 0) > (usable_qty or 0):
+                    est_qty = (safety_stock or 0) - (usable_qty or 0)
+                else:
+                    est_qty = 0
                 est_cost = int(est_qty * (unit_price_ntd or 0) * 1000) / 1000.0
                 total_estimate_cost += est_cost
 
@@ -238,10 +242,19 @@ def build_fixture_tab(parent, current_user: str = None):
             wb.remove(wb["Sheet"])
         wb.save(file)
         messagebox.showinfo("完成", f"已匯出 Excel：{file}")
-
+    def on_generate_location():
+        prefix = entries["儲位"].get().strip()
+        try:
+            loc = generate_location(prefix if prefix else "")
+            entries["儲位"].delete(0, tk.END)
+            entries["儲位"].insert(0, loc)
+            messagebox.showinfo("完成", f"自動生成儲位：{loc}")
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
     ttk.Button(form, text="建立治具", command=on_add_fixture).grid(row=0, column=2, padx=5)
     ttk.Button(form, text="刪除治具", command=on_delete_fixture).grid(row=1, column=2, padx=5)
     ttk.Button(form, text="⚙修改資料", command=on_update_fixture).grid(row=6, column=2, padx=5)
+    ttk.Button(form, text="生成儲位", command=on_generate_location).grid(row=6, column=3, padx=5)
     ttk.Button(form, text="⏫入庫", command=on_add_stock).grid(row=7, column=2, padx=5)
 
     transfer_frame = ttk.LabelFrame(form, text="🔁調撥 / 其它操作")
