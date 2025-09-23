@@ -1,5 +1,5 @@
-# db_cleanup.py
-# 清理多餘欄位，固定路徑 .177 PMS.db
+#$ db_cleanup.py
+#% 清理多餘欄位，固定路徑 .177 PMS.db
 
 import sqlite3
 import os

@@ -1,5 +1,6 @@
 #$ config.py
 #% 系統設定檔，包含 DB_PATH（LOCAL/UNC/Z:）、AUTO_LOGOUT、IDLE_TIMEOUT、VERBOSE_SCHEMA_CHECK
+
 import os
 from db_helper import set_db_path   # 改為由 db_helper 提供 DB_PATH 控制
 

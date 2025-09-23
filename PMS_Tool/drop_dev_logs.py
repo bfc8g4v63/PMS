@@ -1,5 +1,5 @@
-# drop_dev_logs.py
-# 移除多餘的 dev_logs 資料表
+#$ drop_dev_logs.py
+#% 移除多餘的 dev_logs 資料表
 
 import sqlite3
 

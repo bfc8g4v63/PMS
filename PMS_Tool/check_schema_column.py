@@ -1,5 +1,6 @@
-# check_schema_column.py
-# 檢查 SQLite 資料庫中各資料表與欄位結構是否符合預期
+#$ check_schema_column.py
+#% 檢查 SQLite 資料庫中各資料表與欄位結構是否符合預期
+
 import sqlite3
 
 DB_PATH = r"C:\Nelson\Dev\GitHub\PMS\PMS.db"

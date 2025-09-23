@@ -1,5 +1,5 @@
-# migrate_db.py
-# SQLite 資料表欄位修正工具
+#$ migrate_db.py
+#% SQLite 資料表欄位修正工具
 
 import sqlite3
 import os

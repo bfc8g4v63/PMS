@@ -1,5 +1,6 @@
-# schema_helper.py
-# 資料表結構管理
+#$ schema_helper.py
+#% 資料表結構管理
+
 import re
 from db_helper import get_conn, DB_PATH
 

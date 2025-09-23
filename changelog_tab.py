@@ -1,5 +1,6 @@
 #$ changelog_tab.py
 #% 改版歷程分頁，顯示/管理 changelog 表內容
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 from datetime import datetime
@@ -198,6 +199,11 @@ def build_changelog_tab(tab, current_role, db_name):
             cursor.execute("SELECT version, date, content FROM changelog ORDER BY rowid DESC")
             for row in cursor.fetchall():
                 tree.insert("", "end", values=row)
+        children = tree.get_children()
+        if children:
+            tree.selection_set(children[0])
+            tree.focus(children[0])
+            tree.see(children[0])
 
     def on_tree_double_click(event):
         if current_role != "admin":

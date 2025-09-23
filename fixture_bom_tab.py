@@ -1,5 +1,6 @@
 # fixture_bom_tab.py
 # GUI 分頁「治具 BOM 管理」
+
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_helper import (

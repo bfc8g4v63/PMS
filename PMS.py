@@ -1,5 +1,6 @@
 #$ PMS.py
 #% 登入>主介面>整體初始化
+
 import tkinter as tk
 import os
 import hashlib
