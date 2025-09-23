@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 
 DB_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
-OUTPUT_FILE = Path(__file__).parent / "README.md"
+OUTPUT_FILE = Path(__file__).parent.parent / "README.md"
 
 PROJECT_NAME = "PMS"
 FEATURES = [
@@ -20,7 +20,7 @@ FEATURES = [
     "治具申請 (待規劃_電子簽核、申請單、審核)",
     "治具消耗 (待規劃_POWERBI 報表)",
     "異常平台 (待規劃_Trobleshoot Platform)",
-    "帳號管理 (帳號、角色、新增、刪除、啟用、上傳SOP、可見記錄、刪除記錄、可見SOP、帳號管理)",
+    "帳號管理 (已完成_帳號、角色、新增、刪除、啟用、上傳SOP、可見記錄、刪除記錄、可見SOP、帳號管理)",
     "操作紀錄 (已完成_使用者、動作、檔案名稱、時間)",
     "改版歷程 (已完成_版本、日期、內容記錄)",
 ]
