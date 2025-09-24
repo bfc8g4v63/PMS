@@ -14,9 +14,11 @@ def get_conn(path: str = None):
     target = path or DB_PATH
     if not target:
         raise ValueError("DB_PATH 尚未設定，請先呼叫 set_db_path()")
-    conn = sqlite3.connect(target, timeout=10, isolation_level="")
+    conn = sqlite3.connect(target, timeout=5, isolation_level=None)
     conn.execute("PRAGMA journal_mode=WAL;")
+    conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys = ON;")
+    conn.execute("PRAGMA busy_timeout=5000;")
     return conn
 
 @contextmanager

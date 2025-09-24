@@ -1,10 +1,14 @@
 #$ export_readme.py
 #% 匯出 changelog 到 README.md
 
-import sqlite3
+import os
+import sys
 from pathlib import Path
 
-DB_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
+from db_helper import get_conn, DB_PATH
+
 OUTPUT_FILE = Path(__file__).parent.parent / "README.md"
 
 PROJECT_NAME = "PMS"
@@ -23,11 +27,10 @@ FEATURES = [
 ]
 
 def export_readme():
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-    cur.execute("SELECT version, date, content FROM changelog ORDER BY date DESC")
-    rows = cur.fetchall()
-    conn.close()
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT version, date, content FROM changelog ORDER BY date DESC")
+        rows = cur.fetchall()
 
     lines = []
     lines.append(f"# {PROJECT_NAME}\n")

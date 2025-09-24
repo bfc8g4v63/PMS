@@ -1,11 +1,12 @@
-#$ PRAGMA journal_mode_DELETE.py
-#% 將 SQLite 資料庫的 journal mode 設定為 DELETE
+# PRAGMA_journal_mode_DELETE.py
+# 將 SQLite 資料庫的 journal mode 設定為 DELETE
 
-import sqlite3
+import os
+import sys
 
-conn = sqlite3.connect(r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db")
-cursor = conn.cursor()
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-cursor.execute("PRAGMA journal_mode=DELETE;")
-conn.commit()
-conn.close()
+from db_helper import get_conn
+
+with get_conn() as conn:
+    conn.execute("PRAGMA journal_mode=DELETE;")
