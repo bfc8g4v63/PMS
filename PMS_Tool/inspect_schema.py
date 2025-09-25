@@ -1,12 +1,17 @@
 #$ inspect_schema.py
 #% 列出所有資料表與其欄位結構
 
-import os
 import sys
+import os
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
+from config import apply_db_path
 from db_helper import get_conn, DB_PATH
+
+apply_db_path()
 
 def inspect_schema(db_path=DB_PATH):
     if not os.path.exists(db_path):

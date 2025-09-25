@@ -3,11 +3,21 @@
 
 import os
 import psutil
+import sys
+from pathlib import Path
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
+
+from config import apply_db_path
+from db_helper import DB_PATH
+
+apply_db_path()
 
 LOCK_FILES = [
-    r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db",
-    r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db-wal",
-    r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db-shm"
+    DB_PATH,
+    f"{DB_PATH}-wal",
+    f"{DB_PATH}-shm"
 ]
 
 def check_file_in_use(path):

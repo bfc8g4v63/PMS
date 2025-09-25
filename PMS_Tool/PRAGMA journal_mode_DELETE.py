@@ -1,12 +1,16 @@
-# PRAGMA_journal_mode_DELETE.py
-# 將 SQLite 資料庫的 journal mode 設定為 DELETE
+#$ PRAGMA_journal_mode_DELETE.py
+#% 將 SQLite 資料庫的 journal mode 設定為 DELETE
 
-import os
 import sys
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
+from config import apply_db_path
 from db_helper import get_conn
+
+apply_db_path()
 
 with get_conn() as conn:
     conn.execute("PRAGMA journal_mode=DELETE;")

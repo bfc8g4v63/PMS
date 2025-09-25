@@ -1,12 +1,16 @@
 #$ check_schema_column.py
 #% 檢查 SQLite 資料庫中各資料表與欄位結構是否符合預期
 
-import os
 import sys
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
-from db_helper import get_conn, DB_PATH
+from config import apply_db_path
+from db_helper import get_conn
+
+apply_db_path()
 
 expected_schema = {
     "fixtures": [

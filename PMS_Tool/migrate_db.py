@@ -1,13 +1,18 @@
-# migrate_db.py
-# SQLite 資料遷移工具
+#$ migrate_db.py
+#% SQLite 資料遷移工具
 
 import os
 import shutil
 import sys
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
+from config import apply_db_path
 from db_helper import get_conn, DB_PATH
+
+apply_db_path()
 
 BACKUP_PATH = DB_PATH + ".bak"
 

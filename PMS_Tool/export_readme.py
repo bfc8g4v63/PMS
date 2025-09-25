@@ -5,11 +5,15 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
-from db_helper import get_conn, DB_PATH
+from config import apply_db_path
+from db_helper import get_conn
 
-OUTPUT_FILE = Path(__file__).parent.parent / "README.md"
+apply_db_path()
+
+OUTPUT_FILE = ROOT_DIR / "README.md"
 
 PROJECT_NAME = "PMS"
 FEATURES = [

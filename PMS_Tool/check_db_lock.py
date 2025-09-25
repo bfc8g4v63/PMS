@@ -5,10 +5,15 @@ import os
 import sys
 import socket
 from datetime import datetime
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
-from db_helper import DB_PATH, get_conn
+from config import apply_db_path
+from db_helper import get_conn, DB_PATH
+
+apply_db_path()
 
 def check_lock(db_path=DB_PATH):
     hostname = socket.gethostname()

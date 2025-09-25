@@ -1,23 +1,28 @@
 #$ db_cleanup.py
-#% 清理多餘欄位，固定路徑 .177 PMS.db
+#% 清理多餘欄位
 
 import os
 import sys
 import shutil
 from datetime import datetime
+from pathlib import Path
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.append(str(ROOT_DIR))
 
+from config import apply_db_path
 from db_helper import get_conn, DB_PATH
 
-BACKUP_DIR = os.path.dirname(DB_PATH)
+apply_db_path()
+
+BACKUP_DIR = Path(DB_PATH).parent
 
 def backup_db():
-    if not os.path.exists(BACKUP_DIR):
-        os.makedirs(BACKUP_DIR)
+    if not BACKUP_DIR.exists():
+        BACKUP_DIR.mkdir(parents=True)
     ts = datetime.now().strftime("%y%m%d%H%M%S")
-    backup_file = os.path.join(BACKUP_DIR, f"PMS_{ts}.db.bak")
-    if not os.path.exists(DB_PATH):
+    backup_file = BACKUP_DIR / f"PMS_{ts}.db.bak"
+    if not Path(DB_PATH).exists():
         raise FileNotFoundError(f"[X] 找不到來源 DB：{DB_PATH}")
     shutil.copy(DB_PATH, backup_file)
     print(f"[✔] 已建立備份：{backup_file}")
@@ -25,13 +30,11 @@ def backup_db():
 def recreate_table(conn, table_name, correct_sql, cols_to_copy):
     cur = conn.cursor()
     tmp_table = f"{table_name}_new"
-
     cur.execute(f"DROP TABLE IF EXISTS {tmp_table}")
     cur.execute(correct_sql.replace(table_name, tmp_table))
     cur.execute(f"INSERT INTO {tmp_table} SELECT {','.join(cols_to_copy)} FROM {table_name}")
     cur.execute(f"DROP TABLE {table_name}")
     cur.execute(f"ALTER TABLE {tmp_table} RENAME TO {table_name}")
-
     conn.commit()
     print(f"[✔] 已清理 {table_name}")
 
