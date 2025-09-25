@@ -75,7 +75,7 @@ def ensure_changelog_schema(db_path=None, verbose=False):
         cursor = conn.cursor()
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS changelog (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sheet_id TEXT PRIMARY KEY,
                 version TEXT NOT NULL,
                 date TEXT NOT NULL,
                 content TEXT NOT NULL
@@ -186,13 +186,12 @@ def ensure_fixture_schema(db_path=None, verbose=False):
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS transfer_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sheet_id TEXT PRIMARY KEY,
                 part_no TEXT,
                 from_wh TEXT,
                 to_wh TEXT,
                 usable_qty INTEGER,
                 user TEXT,
-                remark TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -201,7 +200,6 @@ def ensure_fixture_schema(db_path=None, verbose=False):
         add_col_if_missing(conn, "transfer_logs", "to_wh", "TEXT")
         add_col_if_missing(conn, "transfer_logs", "usable_qty", "INTEGER")
         add_col_if_missing(conn, "transfer_logs", "user", "TEXT")
-        add_col_if_missing(conn, "transfer_logs", "remark", "TEXT")
         add_col_if_missing(conn, "transfer_logs", "created_at", "TIMESTAMP")
         if verbose:
             cur.execute("PRAGMA table_info(transfer_logs)")
@@ -209,18 +207,16 @@ def ensure_fixture_schema(db_path=None, verbose=False):
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fixture_boms (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                sheet_id TEXT PRIMARY KEY,
                 parent_part_no TEXT,
                 child_part_no TEXT,
                 bom_qty INTEGER DEFAULT 1,
-                remark TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
         add_col_if_missing(conn, "fixture_boms", "parent_part_no", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "child_part_no", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "bom_qty", "INTEGER DEFAULT 1")
-        add_col_if_missing(conn, "fixture_boms", "remark", "TEXT")
         add_col_if_missing(conn, "fixture_boms", "created_at", "TIMESTAMP")
         if verbose:
             cur.execute("PRAGMA table_info(fixture_boms)")

@@ -34,10 +34,10 @@ expected_schema = {
         "id","username","action","filename","timestamp","module"
     ],
     "transfer_logs": [
-        "id","part_no","from_wh","to_wh","transfer_qty","user","remark","created_at"
+        "id","part_no","from_wh","to_wh","transfer_qty","user","created_at"
     ],
     "consumption_logs": [
-        "id","part_no","warehouse","consume_qty","user","remark","created_at"
+        "id","part_no","warehouse","consume_qty","user","created_at"
     ]
 }
 

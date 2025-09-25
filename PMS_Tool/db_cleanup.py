@@ -58,10 +58,9 @@ def main():
                 parent_part_no TEXT,
                 child_part_no TEXT,
                 bom_qty INTEGER,
-                remark TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """, ["bom_id", "parent_part_no", "child_part_no", "bom_qty", "remark", "created_at"])
+        """, ["bom_id", "parent_part_no", "child_part_no", "bom_qty", "created_at"])
 
         recreate_table(conn, "fixtures", """
             CREATE TABLE fixtures (
@@ -86,10 +85,9 @@ def main():
                 to_wh TEXT,
                 transfer_qty INTEGER,
                 user TEXT,
-                remark TEXT,
                 created_at TEXT
             )
-        """, ["id", "part_no", "from_wh", "to_wh", "transfer_qty", "user", "remark", "created_at"])
+        """, ["id", "part_no", "from_wh", "to_wh", "transfer_qty", "user", "created_at"])
 
         recreate_table(conn, "warehouse_stock", """
             CREATE TABLE warehouse_stock (

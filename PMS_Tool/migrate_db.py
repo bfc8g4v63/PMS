@@ -176,7 +176,7 @@ def migrate():
 
         cur.execute("PRAGMA table_info(transfer_logs)")
         cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"id","part_no","from_wh","to_wh","transfer_qty","user","remark","created_at"}
+        expected_cols = {"id","part_no","from_wh","to_wh","transfer_qty","user","created_at"}
         if set(cols) != expected_cols:
             recreate_table(
                 cur,
@@ -189,22 +189,21 @@ def migrate():
                     to_wh TEXT,
                     transfer_qty INTEGER,
                     user TEXT,
-                    remark TEXT,
                     created_at TEXT
                 )
                 """,
                 insert_sql="""
-                INSERT INTO transfer_logs (id, part_no, from_wh, to_wh, transfer_qty, user, remark, created_at)
+                INSERT INTO transfer_logs (id, part_no, from_wh, to_wh, transfer_qty, user, created_at)
                 """,
                 select_sql="""
-                SELECT id, part_no, from_wh, to_wh, usable_qty AS transfer_qty, user, remark, timestamp AS created_at
+                SELECT id, part_no, from_wh, to_wh, usable_qty AS transfer_qty, user, timestamp AS created_at
                 FROM transfer_logs_old
                 """
             )
 
         cur.execute("PRAGMA table_info(consumption_logs)")
         cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"id","part_no","warehouse","consume_qty","user","remark","created_at"}
+        expected_cols = {"id","part_no","warehouse","consume_qty","user","created_at"}
         if set(cols) != expected_cols:
             recreate_table(
                 cur,
@@ -216,15 +215,14 @@ def migrate():
                     warehouse TEXT,
                     consume_qty INTEGER,
                     user TEXT,
-                    remark TEXT,
                     created_at TEXT
                 )
                 """,
                 insert_sql="""
-                INSERT INTO consumption_logs (id, part_no, warehouse, consume_qty, user, remark, created_at)
+                INSERT INTO consumption_logs (id, part_no, warehouse, consume_qty, user, created_at)
                 """,
                 select_sql="""
-                SELECT id, part_no, warehouse, usable_qty AS consume_qty, user, remark, timestamp AS created_at
+                SELECT id, part_no, warehouse, usable_qty AS consume_qty, user, timestamp AS created_at
                 FROM consumption_logs_old
                 """
             )

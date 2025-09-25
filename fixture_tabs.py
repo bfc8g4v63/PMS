@@ -24,7 +24,7 @@ CATEGORIES = ["電腦設備類","載具類","治具類","板子類","主機類",
 
 WAREHOUSES = CORE_WAREHOUSES + ["消耗"]
 
-def build_fixture_tab(parent, current_user: str = None):
+def build_fixture_tab(parent, current_user: str = None, on_change=None):
     frames, trees, total_labels, total_price_labels = {}, {}, {}, {}
 
     notebook = ttk.Notebook(parent)
@@ -44,6 +44,11 @@ def build_fixture_tab(parent, current_user: str = None):
     combo_cat = ttk.Combobox(form, values=CATEGORIES, state="readonly", width=18)
     combo_cat.grid(row=3, column=1, sticky="w", padx=3, pady=2)
     entries["治具類群"] = combo_cat
+
+    def after_action():
+        refresh_all() 
+        if on_change:
+            on_change()
 
     def on_add_fixture():
         part_no = entries["治具料號"].get().strip()
@@ -75,10 +80,11 @@ def build_fixture_tab(parent, current_user: str = None):
             insert_fixture(
                 part_no, part_name, part_spec, part_group,
                 ntd_val, safety_val, loc_fmt,
-                unit_price_usd=usd_val
+                unit_price_usd=usd_val,
+                user=current_user
             )
             messagebox.showinfo("完成", f"治具 {part_no} 已新增")
-            refresh_all()
+            after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 
@@ -89,9 +95,9 @@ def build_fixture_tab(parent, current_user: str = None):
         if not messagebox.askyesno("確認", f"確定刪除 {part_no}？將移除所有倉別存量與 BOM 及相關紀錄"):
             return
         try:
-            delete_fixture(part_no)
+            delete_fixture(part_no, user=current_user or "")
             messagebox.showinfo("完成", f"{part_no} 已刪除")
-            refresh_all()
+            after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 
@@ -107,9 +113,9 @@ def build_fixture_tab(parent, current_user: str = None):
         current_tab = notebook.tab(notebook.select(), "text")
         wh = current_tab if current_tab != "消耗" else "虹堡"
         try:
-            add_stock(part_no, usable_qty, wh, user=current_user or "", remark="入庫作業")
+            add_stock(part_no, usable_qty, wh, user=current_user or "")
             messagebox.showinfo("完成", f"{part_no} 已入庫 {usable_qty} 至 {wh}")
-            refresh_all()
+            after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 
@@ -126,9 +132,9 @@ def build_fixture_tab(parent, current_user: str = None):
         if from_wh == to_wh:
             messagebox.showerror("錯誤","來源與目標倉別相同"); return
         try:
-            transfer_stock(part_no, usable_qty, from_wh, to_wh, user=current_user or "", remark="調撥作業")
+            transfer_stock(part_no, usable_qty, from_wh, to_wh, user=current_user or "")
             messagebox.showinfo("完成", f"{part_no} 已調撥 {usable_qty} 從 {from_wh} 到 {to_wh}")
-            refresh_all()
+            after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 
@@ -146,7 +152,7 @@ def build_fixture_tab(parent, current_user: str = None):
         try:
             consume_stock(part_no, usable_qty, wh, user=current_user or "", line="", purpose="生產消耗")
             messagebox.showinfo("完成", f"{part_no} 已自 {wh} 消耗 {usable_qty}")
-            refresh_all()
+            after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 
@@ -178,10 +184,11 @@ def build_fixture_tab(parent, current_user: str = None):
                 unit_price_ntd=ntd_val,
                 unit_price_usd=usd_val,
                 safety_stock=safety_val,
-                storage_location=loc_fmt
+                storage_location=loc_fmt,
+                user=current_user or ""
             )
             messagebox.showinfo("完成", f"{part_no} 的資料已更新")
-            refresh_all()
+            after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
 
