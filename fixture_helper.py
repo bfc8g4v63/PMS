@@ -70,7 +70,7 @@ def ensure_schemas():
         """)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS fixture_boms (
-            sheet_id TEXT PRIMARY KEY,
+            bom_id INTEGER PRIMARY KEY AUTOINCREMENT,
             parent_part_no TEXT,
             child_part_no TEXT,
             bom_qty INTEGER,
@@ -335,10 +335,10 @@ def get_bom_by_part(parent_part_no: str):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-        SELECT id, parent_part_no, child_part_no, bom_qty
+        SELECT bom_id, parent_part_no, child_part_no, bom_qty
         FROM fixture_boms
         WHERE parent_part_no=?
-        ORDER BY id
+        ORDER BY bom_id
         """, (parent_part_no,))
         return cur.fetchall()
 
@@ -348,13 +348,13 @@ def add_bom_item(parent_part_no: str, child_part_no: str, qty: int):
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("""
-        SELECT id, bom_qty FROM fixture_boms
+        SELECT bom_id, bom_qty FROM fixture_boms
         WHERE parent_part_no=? AND child_part_no=?
         """, (parent_part_no, child_part_no))
         row = cur.fetchone()
         if row:
             new_qty = row[1] + qty
-            cur.execute("UPDATE fixture_boms SET bom_qty=? WHERE id=?", (new_qty, row[0]))
+            cur.execute("UPDATE fixture_boms SET bom_qty=? WHERE bom_id=?", (new_qty, row[0]))
         else:
             cur.execute("""
             INSERT INTO fixture_boms(parent_part_no, child_part_no, bom_qty)
@@ -364,5 +364,5 @@ def add_bom_item(parent_part_no: str, child_part_no: str, qty: int):
 def delete_bom_item(bom_id: int):
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("DELETE FROM fixture_boms WHERE id=?", (bom_id,))
+        cur.execute("DELETE FROM fixture_boms WHERE bom_id=?", (bom_id,))
         conn.commit()

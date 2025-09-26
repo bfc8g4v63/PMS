@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?><sqlb_project><db path="PMS.db" readonly="0" foreign_keys="1" case_sensitive_like="0" temp_store="0" wal_autocheckpoint="1000" synchronous="2"/><attached/><window><main_tabs open="browser pragmas query structure" current="2"/></window><tab_structure><column_width id="0" width="300"/><column_width id="1" width="0"/><column_width id="2" width="100"/><column_width id="3" width="2258"/><column_width id="4" width="0"/><expanded_item id="0" parent="1"/><expanded_item id="1" parent="1"/><expanded_item id="2" parent="1"/><expanded_item id="3" parent="1"/></tab_structure><tab_browse><table title="activity_logs" custom_title="0" dock_id="1" table="4,13:mainactivity_logs"/><dock_state state="000000ff00000000fd00000001000000020000033c00000221fc0100000001fb000000160064006f0063006b00420072006f007700730065003101000000000000033c0000012c00ffffff0000027a0000000000000004000000040000000800000008fc00000000"/><default_encoding codec=""/><browse_table_settings><table schema="main" name="activity_logs" show_row_id="0" encoding="" plot_x_axis="" unlock_view_pk="_rowid_" freeze_columns="0"><sort/><column_widths><column index="1" value="31"/><column index="2" value="101"/><column index="3" value="101"/><column index="4" value="300"/><column index="5" value="124"/><column index="6" value="59"/></column_widths><filter_values/><conditional_formats/><row_id_formats/><display_formats/><hidden_columns/><plot_y_axes/><global_filter/></table></browse_table_settings></tab_browse><tab_sql><sql name="SQL 1*">-- 備份舊表（避免資料遺失）
+ALTER TABLE fixture_boms RENAME TO fixture_boms_old;
+
+-- 新建表，使用 bom_id 做主鍵
+CREATE TABLE fixture_boms (
+    bom_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    parent_part_no TEXT,
+    child_part_no TEXT,
+    bom_qty INTEGER,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 如果舊表有資料，需要轉移
+INSERT INTO fixture_boms (parent_part_no, child_part_no, bom_qty, created_at)
+SELECT parent_part_no, child_part_no, bom_qty, created_at
+FROM fixture_boms_old;
+
+-- 檢查後可以刪除舊表
+DROP TABLE fixture_boms_old;
+</sql><current_tab id="0"/></tab_sql></sqlb_project>

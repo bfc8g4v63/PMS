@@ -32,7 +32,7 @@ def ensure_fixture_log_schema():
 
 def generate_sheet_id(action_code: str) -> str:
     prefix, _ = FIXTURE_ACTION_MAP.get(action_code, ("Z", action_code))
-    ym = datetime.now().strftime("%y%m")  # 例如 2509
+    ym = datetime.now().strftime("%y%m")
     base = f"{ym}"
     with get_conn() as conn:
         cur = conn.cursor()

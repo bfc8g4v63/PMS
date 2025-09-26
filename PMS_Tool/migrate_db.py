@@ -1,234 +1,205 @@
 #$ migrate_db.py
 #% SQLite 資料遷移工具
 
-import os
-import shutil
 import sys
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+ROOT_DIR = Path(__file__).resolve().parent
 sys.path.append(str(ROOT_DIR))
 
 from config import apply_db_path
-from db_helper import get_conn, DB_PATH
+from db_helper import get_conn
 
-apply_db_path()
+def table_exists(cur, name):
+    cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (name,))
+    return cur.fetchone() is not None
 
-BACKUP_PATH = DB_PATH + ".bak"
-
-def backup_db():
-    if not os.path.exists(BACKUP_PATH):
-        shutil.copy2(DB_PATH, BACKUP_PATH)
-        print(f"[✓] 已建立備份 {BACKUP_PATH}")
-    else:
-        print(f"[!] 備份已存在：{BACKUP_PATH}")
-
-def recreate_table(cur, table, schema_sql, insert_sql=None, select_sql=None):
-    cur.execute(f"ALTER TABLE {table} RENAME TO {table}_old")
-    cur.execute(schema_sql)
-    if insert_sql and select_sql:
-        cur.execute(insert_sql + " " + select_sql)
-    cur.execute(f"DROP TABLE {table}_old")
-    print(f"[✓] {table} 表格已修正")
-
-def migrate():
-    backup_db()
+def migrate_fixture_logs():
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("PRAGMA table_info(fixtures)")
-        cols = [r[1] for r in cur.fetchall()]
-        if "created_at" in cols:
-            recreate_table(
-                cur,
-                "fixtures",
-                """
-                CREATE TABLE fixtures (
-                    part_no TEXT PRIMARY KEY,
-                    part_name TEXT,
-                    part_spec TEXT,
-                    part_group TEXT,
-                    unit_price_ntd REAL,
-                    unit_price_usd REAL,
-                    safety_stock INTEGER,
-                    storage_location TEXT
-                )
-                """,
-                insert_sql="""
-                INSERT INTO fixtures (part_no, part_name, part_spec, part_group,
-                                      unit_price_ntd, unit_price_usd,
-                                      safety_stock, storage_location)
-                """,
-                select_sql="""
-                SELECT part_no, part_name, part_spec, part_group,
-                       unit_price_ntd, unit_price_usd,
-                       safety_stock, storage_location
-                FROM fixtures_old
-                """
-            )
+        if not table_exists(cur, "fixture_logs"):
+            return
+        cur.execute("PRAGMA table_info(fixture_logs)")
+        cols = [c[1] for c in cur.fetchall()]
+        if "fixture_log_id" in cols:
+            print("[SKIP] fixture_logs 已是新版")
+            return
 
-        cur.execute("PRAGMA table_info(warehouse_stock)")
-        cols = [r[1] for r in cur.fetchall()]
-        if "qty" in cols:
-            recreate_table(
-                cur,
-                "warehouse_stock",
-                """
-                CREATE TABLE warehouse_stock (
-                    part_no TEXT,
-                    warehouse TEXT,
-                    usable_qty INTEGER DEFAULT 0,
-                    safety_stock INTEGER DEFAULT 0,
-                    PRIMARY KEY (part_no, warehouse),
-                    FOREIGN KEY (part_no) REFERENCES fixtures(part_no)
-                )
-                """,
-                insert_sql="""
-                INSERT INTO warehouse_stock (part_no, warehouse, usable_qty, safety_stock)
-                """,
-                select_sql="""
-                SELECT part_no, warehouse, SUM(qty) as usable_qty, MAX(safety_stock)
-                FROM warehouse_stock_old
-                GROUP BY part_no, warehouse
-                """
+        cur.execute("""
+            CREATE TABLE fixture_logs_new (
+                fixture_log_id TEXT PRIMARY KEY,
+                fixture_log_part_no TEXT,
+                fixture_log_action TEXT,
+                fixture_log_qty INTEGER,
+                fixture_log_from_wh TEXT,
+                fixture_log_to_wh TEXT,
+                fixture_log_user TEXT,
+                fixture_log_timestamp TEXT
             )
-
-        cur.execute("PRAGMA table_info(issues)")
-        cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"product_code","product_name","dip_sop","assembly_sop","test_sop","packaging_sop","oqc_checklist"}
-        if set(cols) != expected_cols:
-            recreate_table(
-                cur,
-                "issues",
-                """
-                CREATE TABLE issues (
-                    product_code TEXT PRIMARY KEY,
-                    product_name TEXT,
-                    dip_sop TEXT,
-                    assembly_sop TEXT,
-                    test_sop TEXT,
-                    packaging_sop TEXT,
-                    oqc_checklist TEXT
-                )
-                """,
-                insert_sql="""
-                INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist)
-                """,
-                select_sql="""
-                SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist
-                FROM issues_old
-                """
-            )
-
-        cur.execute("PRAGMA table_info(users)")
-        cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"username","password","role","specialty","can_view_logs","can_delete_logs","can_upload_sop","can_view_issues","can_manage_users"}
-        if set(cols) != expected_cols:
-            recreate_table(
-                cur,
-                "users",
-                """
-                CREATE TABLE users (
-                    username TEXT PRIMARY KEY,
-                    password TEXT,
-                    role TEXT,
-                    specialty TEXT,
-                    can_view_logs INTEGER DEFAULT 0,
-                    can_delete_logs INTEGER DEFAULT 0,
-                    can_upload_sop INTEGER DEFAULT 0,
-                    can_view_issues INTEGER DEFAULT 0,
-                    can_manage_users INTEGER DEFAULT 0
-                )
-                """,
-                insert_sql="""
-                INSERT INTO users (username,password,role,specialty,can_view_logs,can_delete_logs,can_upload_sop,can_view_issues,can_manage_users)
-                """,
-                select_sql="""
-                SELECT username,password,role,specialty,can_view_logs,can_delete_logs,can_upload_sop,can_view_issues,can_manage_users
-                FROM users_old
-                """
-            )
-
-        cur.execute("PRAGMA table_info(activity_logs)")
-        cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"id","username","action","filename","timestamp","module"}
-        if set(cols) != expected_cols:
-            recreate_table(
-                cur,
-                "activity_logs",
-                """
-                CREATE TABLE activity_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT,
-                    action TEXT,
-                    filename TEXT,
-                    timestamp TEXT,
-                    module TEXT
-                )
-                """,
-                insert_sql="""
-                INSERT INTO activity_logs (id, username, action, filename, timestamp, module)
-                """,
-                select_sql="""
-                SELECT id, username, action, filename, timestamp, module
-                FROM activity_logs_old
-                """
-            )
-
-        cur.execute("PRAGMA table_info(transfer_logs)")
-        cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"id","part_no","from_wh","to_wh","transfer_qty","user","created_at"}
-        if set(cols) != expected_cols:
-            recreate_table(
-                cur,
-                "transfer_logs",
-                """
-                CREATE TABLE transfer_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    part_no TEXT,
-                    from_wh TEXT,
-                    to_wh TEXT,
-                    transfer_qty INTEGER,
-                    user TEXT,
-                    created_at TEXT
-                )
-                """,
-                insert_sql="""
-                INSERT INTO transfer_logs (id, part_no, from_wh, to_wh, transfer_qty, user, created_at)
-                """,
-                select_sql="""
-                SELECT id, part_no, from_wh, to_wh, usable_qty AS transfer_qty, user, timestamp AS created_at
-                FROM transfer_logs_old
-                """
-            )
-
-        cur.execute("PRAGMA table_info(consumption_logs)")
-        cols = [r[1] for r in cur.fetchall()]
-        expected_cols = {"id","part_no","warehouse","consume_qty","user","created_at"}
-        if set(cols) != expected_cols:
-            recreate_table(
-                cur,
-                "consumption_logs",
-                """
-                CREATE TABLE consumption_logs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    part_no TEXT,
-                    warehouse TEXT,
-                    consume_qty INTEGER,
-                    user TEXT,
-                    created_at TEXT
-                )
-                """,
-                insert_sql="""
-                INSERT INTO consumption_logs (id, part_no, warehouse, consume_qty, user, created_at)
-                """,
-                select_sql="""
-                SELECT id, part_no, warehouse, usable_qty AS consume_qty, user, timestamp AS created_at
-                FROM consumption_logs_old
-                """
-            )
-
+        """)
+        sel_cols = []
+        for c in ["part_no","action","change_qty","from_wh","to_wh","user","timestamp"]:
+            sel_cols.append(c if c in cols else "NULL")
+        cur.execute(f"SELECT {','.join(sel_cols)} FROM fixture_logs")
+        rows = cur.fetchall()
+        for idx, r in enumerate(rows, 1):
+            log_id = f"FLOG-{idx:06d}"
+            cur.execute("""
+                INSERT INTO fixture_logs_new
+                (fixture_log_id, fixture_log_part_no, fixture_log_action, fixture_log_qty,
+                 fixture_log_from_wh, fixture_log_to_wh, fixture_log_user, fixture_log_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (log_id, r[0], r[1], r[2], r[3], r[4], r[5], r[6]))
+        cur.execute("DROP TABLE fixture_logs")
+        cur.execute("ALTER TABLE fixture_logs_new RENAME TO fixture_logs")
         conn.commit()
-        print("[✓] 資料庫欄位全部檢查並修正完成")
+        print("[OK] fixture_logs 已完成遷移")
+
+def migrate_transfer_logs():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "transfer_logs"):
+            return
+        cur.execute("PRAGMA table_info(transfer_logs)")
+        cols = [c[1] for c in cur.fetchall()]
+        if "transfer_log_id" in cols:
+            print("[SKIP] transfer_logs 已是新版")
+            return
+
+        cur.execute("""
+            CREATE TABLE transfer_logs_new (
+                transfer_log_id TEXT PRIMARY KEY,
+                transfer_log_part_no TEXT,
+                transfer_log_from_wh TEXT,
+                transfer_log_to_wh TEXT,
+                transfer_log_qty INTEGER,
+                transfer_log_user TEXT,
+                transfer_log_timestamp TEXT
+            )
+        """)
+        sel_cols = []
+        for c in ["part_no","from_wh","to_wh","transfer_qty","user","created_at"]:
+            sel_cols.append(c if c in cols else "NULL")
+        cur.execute(f"SELECT {','.join(sel_cols)} FROM transfer_logs")
+        rows = cur.fetchall()
+        for idx, r in enumerate(rows, 1):
+            log_id = f"TLOG-{idx:06d}"
+            cur.execute("""
+                INSERT INTO transfer_logs_new
+                (transfer_log_id, transfer_log_part_no, transfer_log_from_wh, transfer_log_to_wh,
+                 transfer_log_qty, transfer_log_user, transfer_log_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (log_id, r[0], r[1], r[2], r[3], r[4], r[5]))
+        cur.execute("DROP TABLE transfer_logs")
+        cur.execute("ALTER TABLE transfer_logs_new RENAME TO transfer_logs")
+        conn.commit()
+        print("[OK] transfer_logs 已完成遷移")
+
+def migrate_consumption_logs():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "consumption_logs"):
+            return
+        cur.execute("PRAGMA table_info(consumption_logs)")
+        cols = [c[1] for c in cur.fetchall()]
+        if "consumption_log_id" in cols:
+            print("[SKIP] consumption_logs 已是新版")
+            return
+
+        cur.execute("""
+            CREATE TABLE consumption_logs_new (
+                consumption_log_id TEXT PRIMARY KEY,
+                consumption_log_part_no TEXT,
+                consumption_log_warehouse TEXT,
+                consumption_log_qty INTEGER,
+                consumption_log_user TEXT,
+                consumption_log_timestamp TEXT
+            )
+        """)
+        sel_cols = []
+        for c in ["part_no","warehouse","consume_qty","user","created_at"]:
+            sel_cols.append(c if c in cols else "NULL")
+        cur.execute(f"SELECT {','.join(sel_cols)} FROM consumption_logs")
+        rows = cur.fetchall()
+        for idx, r in enumerate(rows, 1):
+            log_id = f"CLOG-{idx:06d}"
+            cur.execute("""
+                INSERT INTO consumption_logs_new
+                (consumption_log_id, consumption_log_part_no, consumption_log_warehouse,
+                 consumption_log_qty, consumption_log_user, consumption_log_timestamp)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (log_id, r[0], r[1], r[2], r[3], r[4]))
+        cur.execute("DROP TABLE consumption_logs")
+        cur.execute("ALTER TABLE consumption_logs_new RENAME TO consumption_logs")
+        conn.commit()
+        print("[OK] consumption_logs 已完成遷移")
+
+def migrate_fixture_boms():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "fixture_boms"):
+            return
+        cur.execute("PRAGMA table_info(fixture_boms)")
+        cols = [c[1] for c in cur.fetchall()]
+        if "fixture_bom_id" in cols:
+            print("[SKIP] fixture_boms 已是新版")
+            return
+
+        cur.execute("""
+            CREATE TABLE fixture_boms_new (
+                fixture_bom_id TEXT PRIMARY KEY,
+                fixture_bom_parent_no TEXT,
+                fixture_bom_child_no TEXT,
+                fixture_bom_qty INTEGER,
+                fixture_bom_timestamp TEXT
+            )
+        """)
+        sel_cols = []
+        for c in ["parent_part_no","child_part_no","bom_qty","created_at"]:
+            sel_cols.append(c if c in cols else "NULL")
+        cur.execute(f"SELECT {','.join(sel_cols)} FROM fixture_boms")
+        rows = cur.fetchall()
+        for idx, r in enumerate(rows, 1):
+            bom_id = f"BOM-{idx:06d}"
+            cur.execute("""
+                INSERT INTO fixture_boms_new
+                (fixture_bom_id, fixture_bom_parent_no, fixture_bom_child_no,
+                 fixture_bom_qty, fixture_bom_timestamp)
+                VALUES (?, ?, ?, ?, ?)
+            """, (bom_id, r[0], r[1], r[2], r[3]))
+        cur.execute("DROP TABLE fixture_boms")
+        cur.execute("ALTER TABLE fixture_boms_new RENAME TO fixture_boms")
+        conn.commit()
+        print("[OK] fixture_boms 已完成遷移")
+
+def migrate_issues_to_sop():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "issues"):
+            return
+        if table_exists(cur, "SOP"):
+            print("[SKIP] SOP 已存在")
+            return
+        cur.execute("ALTER TABLE issues RENAME TO SOP")
+        print("[OK] issues 已改名為 SOP")
+
+def migrate_changelog_to_change_log():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "changelog"):
+            return
+        if table_exists(cur, "change_log"):
+            print("[SKIP] change_log 已存在")
+            return
+        cur.execute("ALTER TABLE changelog RENAME TO change_log")
+        print("[OK] changelog 已改名為 change_log")
 
 if __name__ == "__main__":
-    migrate()
+    apply_db_path()
+    migrate_fixture_logs()
+    migrate_transfer_logs()
+    migrate_consumption_logs()
+    migrate_fixture_boms()
+    migrate_issues_to_sop()
+    migrate_changelog_to_change_log()
+    print("[DONE] 所有資料表已完成一次性遷移")

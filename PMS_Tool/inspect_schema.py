@@ -13,7 +13,11 @@ from db_helper import get_conn, DB_PATH
 
 apply_db_path()
 
-def inspect_schema(db_path=DB_PATH):
+def inspect_schema(db_path=None):
+    if db_path is None:
+        with get_conn() as conn:
+            db_path = conn.execute("PRAGMA database_list").fetchone()[2]
+
     if not os.path.exists(db_path):
         print(f"[X] 找不到資料庫: {db_path}")
         return

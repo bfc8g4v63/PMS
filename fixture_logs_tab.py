@@ -43,19 +43,19 @@ def build_fixture_logs_tab(frame, refresh_only=False):
     for col in columns:
         tree.heading(col, text=col)
         if col == "治具料號":
-            tree.column(col, width=60, anchor="center")
+            tree.column(col, width=50, anchor="center")
         elif col == "治具品名":
-            tree.column(col, width=180, anchor="center")
+            tree.column(col, width=280, anchor="center")
         elif col == "治具規格":
-            tree.column(col, width=180, anchor="center")
+            tree.column(col, width=280, anchor="center")
         elif col == "動作":
-            tree.column(col, width=60, anchor="center")
+            tree.column(col, width=30, anchor="center")
         elif col == "異動數量":
             tree.column(col, width=30, anchor="center")
         elif col in ("來源倉", "目標倉"):
             tree.column(col, width=30, anchor="center")
         elif col == "治具操作人":
-            tree.column(col, width=30, anchor="center")
+            tree.column(col, width=40, anchor="center")
         elif col == "時間":
             tree.column(col, width=100, anchor="center")
         else:
