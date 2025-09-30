@@ -60,7 +60,7 @@ def build_changelog_tab(tab, current_role, db_name):
                 return
             with get_conn() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM changelog WHERE version = ?", (version,))
+                cursor.execute("SELECT COUNT(*) FROM change_log WHERE version = ?", (version,))
                 exists = cursor.fetchone()[0] > 0
                 if exists:
                     add_button.config(state=tk.DISABLED)
@@ -116,7 +116,7 @@ def build_changelog_tab(tab, current_role, db_name):
                 with get_conn() as conn:
                     cursor = conn.cursor()
                     cursor.execute(
-                        "INSERT INTO changelog (version, date, content) VALUES (?, ?, ?)",
+                        "INSERT INTO change_log (version, date, content) VALUES (?, ?, ?)",
                         (version, date_val, content),
                     )
                     conn.commit()
@@ -148,7 +148,7 @@ def build_changelog_tab(tab, current_role, db_name):
                     messagebox.showerror("時間格式錯誤", "時間必須是 YYYY-MM-DD HH:MM:SS 格式")
                     return
                 cursor.execute(
-                    "UPDATE changelog SET content = ?, date = ? WHERE version = ?",
+                    "UPDATE change_log SET content = ?, date = ? WHERE version = ?",
                     (content, date_val, version),
 )
                 conn.commit()
@@ -170,7 +170,7 @@ def build_changelog_tab(tab, current_role, db_name):
             if confirm:
                 with get_conn() as conn:
                     cursor = conn.cursor()
-                    cursor.execute("DELETE FROM changelog WHERE version = ?", (version,))
+                    cursor.execute("DELETE FROM change_log WHERE version = ?", (version,))
                     conn.commit()
                 refresh_changelog()
 
@@ -196,7 +196,7 @@ def build_changelog_tab(tab, current_role, db_name):
         tree.delete(*tree.get_children())
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT version, date, content FROM changelog ORDER BY rowid DESC")
+            cursor.execute("SELECT version, date, content FROM change_log ORDER BY rowid DESC")
             for row in cursor.fetchall():
                 tree.insert("", "end", values=row)
         children = tree.get_children()

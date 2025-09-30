@@ -92,7 +92,7 @@ def build_fixture_logs_tab(frame, refresh_only=False):
         if not messagebox.askyesno("確認", "確定要刪除所選紀錄？"):
             return
         try:
-            ids = [tree.item(i, "values")[0] for i in sel]  # 抓 id
+            ids = [tree.item(i, "values")[0] for i in sel]
             delete_fixture_logs(ids)
             on_query()
             messagebox.showinfo("完成", "所選紀錄已刪除")

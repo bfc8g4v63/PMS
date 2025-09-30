@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parent
-sys.path.append(str(ROOT_DIR))
+sys.path.append(str(ROOT_DIR.parent))
 
 from config import apply_db_path
 from db_helper import get_conn
@@ -194,6 +194,88 @@ def migrate_changelog_to_change_log():
         cur.execute("ALTER TABLE changelog RENAME TO change_log")
         print("[OK] changelog 已改名為 change_log")
 
+def migrate_users_view_issue_to_sop_info():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(users)")
+        cols = [r[1] for r in cur.fetchall()]
+        if "can_view_issues" in cols and "can_view_sop_info" not in cols:
+            print("[INFO] users 表存在 can_view_issues，開始轉換為 can_view_sop_info")
+            cur.execute("ALTER TABLE users ADD COLUMN can_view_sop_info INTEGER DEFAULT 0")
+            cur.execute("UPDATE users SET can_view_sop_info = can_view_issues")
+            conn.commit()
+            print("[OK] 已完成 users 欄位轉換 (can_view_issues → can_view_sop_info)")
+        else:
+            print("[SKIP] 不需要轉換 users 欄位")
+
+def migrate_users_drop_old_col():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(users)")
+        cols = [r[1] for r in cur.fetchall()]
+        if "can_view_issues" not in cols:
+            print("[SKIP] users 表沒有 can_view_issues，不需要移除")
+            return
+
+        print("[INFO] users 表存在 can_view_issues，開始刪除舊欄位")
+
+        cur.execute("""
+            CREATE TABLE users_new (
+                username TEXT,
+                password TEXT,
+                role TEXT,
+                specialty TEXT,
+                can_view_logs INTEGER DEFAULT 0,
+                can_delete_logs INTEGER DEFAULT 0,
+                can_upload_sop INTEGER DEFAULT 0,
+                can_view_sop_info INTEGER DEFAULT 0,
+                can_manage_users INTEGER DEFAULT 0,
+                can_add INTEGER DEFAULT 0,
+                can_delete INTEGER DEFAULT 0,
+                active INTEGER DEFAULT 1
+            )
+        """)
+
+        cur.execute("""
+            INSERT INTO users_new (username, password, role, specialty,
+                                   can_view_logs, can_delete_logs, can_upload_sop,
+                                   can_view_sop_info, can_manage_users, can_add,
+                                   can_delete, active)
+            SELECT username, password, role, specialty,
+                   can_view_logs, can_delete_logs, can_upload_sop,
+                   can_view_sop_info, can_manage_users, can_add,
+                   can_delete, active
+            FROM users
+        """)
+
+        cur.execute("DROP TABLE users")
+        cur.execute("ALTER TABLE users_new RENAME TO users")
+        conn.commit()
+
+        print("[OK] users 表已移除 can_view_issues")
+
+def migrate_users_to_module_management():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "users"):
+            return
+        if table_exists(cur, "module_management"):
+            print("[SKIP] module_management 已存在")
+            return
+        cur.execute("ALTER TABLE users RENAME TO module_management")
+        print("[OK] users 已改名為 module_management")
+
+def migrate_sop_to_sop_information():
+    with get_conn() as conn:
+        cur = conn.cursor()
+        if not table_exists(cur, "SOP"):
+            return
+        if table_exists(cur, "sop_information"):
+            print("[SKIP] sop_information 已存在")
+            return
+        cur.execute("ALTER TABLE SOP RENAME TO sop_information")
+        print("[OK] SOP 已改名為 sop_information")
+
 if __name__ == "__main__":
     apply_db_path()
     migrate_fixture_logs()
@@ -202,4 +284,9 @@ if __name__ == "__main__":
     migrate_fixture_boms()
     migrate_issues_to_sop()
     migrate_changelog_to_change_log()
+    migrate_users_view_issue_to_sop_info()
+    migrate_users_drop_old_col()
+    migrate_users_to_module_management()
+    migrate_sop_to_sop_information()
+
     print("[DONE] 所有資料表已完成一次性遷移")

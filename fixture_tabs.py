@@ -20,7 +20,7 @@ from fixture_helper import (
 )
 
 EXCHANGE_RATE = 30.375
-CATEGORIES = ["電腦設備類","載具類","治具類","板子類","主機類","其它類","線材類","卡片類","電供類","消耗類"]
+CATEGORIES = ["電腦設備類","載具類","治具類","板子類","主機類","電供類","線材類","卡片類","其它類","消耗類"]
 
 WAREHOUSES = CORE_WAREHOUSES + ["消耗"]
 

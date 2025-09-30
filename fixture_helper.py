@@ -47,34 +47,32 @@ def ensure_schemas():
         """)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS transfer_logs (
-            sheet_id TEXT PRIMARY KEY,
-            part_no TEXT,
-            transfer_qty INTEGER,
-            from_wh TEXT,
-            to_wh TEXT,
-            user TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            transfer_log_id TEXT PRIMARY KEY,
+            transfer_log_part_no TEXT,
+            transfer_log_qty INTEGER,
+            transfer_log_from_wh TEXT,
+            transfer_log_to_wh TEXT,
+            transfer_log_user TEXT,
+            transfer_log_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS consumption_logs (
-            sheet_id TEXT PRIMARY KEY,
-            part_no TEXT,
-            consume_qty INTEGER,
-            warehouse TEXT,
-            user TEXT,
-            line TEXT,
-            purpose TEXT,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            consumption_log_id TEXT PRIMARY KEY,
+            consumption_log_part_no TEXT,
+            consumption_log_qty INTEGER,
+            consumption_log_warehouse TEXT,
+            consumption_log_user TEXT,
+            consumption_log_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """)
         cur.execute("""
         CREATE TABLE IF NOT EXISTS fixture_boms (
-            bom_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            parent_part_no TEXT,
-            child_part_no TEXT,
-            bom_qty INTEGER,
-            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            fixture_bom_id TEXT PRIMARY KEY,
+            fixture_bom_parent_no TEXT,
+            fixture_bom_child_no TEXT,
+            fixture_bom_qty INTEGER,
+            fixture_bom_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """)
 
@@ -131,8 +129,8 @@ def delete_fixture(part_no, user=""):
         cur = conn.cursor()
         cur.execute("DELETE FROM warehouse_stock WHERE part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixture_boms WHERE parent_part_no = ? OR child_part_no = ?", (part_no, part_no))
-        cur.execute("DELETE FROM transfer_logs WHERE part_no = ?", (part_no,))
-        cur.execute("DELETE FROM consumption_logs WHERE part_no = ?", (part_no,))
+        cur.execute("DELETE FROM transfer_logs WHERE transfer_log_part_no = ?", (part_no,))
+        cur.execute("DELETE FROM consumption_logs WHERE consumption_log_part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixtures WHERE part_no = ?", (part_no,))
         conn.commit()
     log_fixture_activity(part_no, "delete_fixture", user=user)
@@ -196,7 +194,7 @@ def transfer_stock(part_no, qty, from_wh, to_wh, user=""):
         cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
                     (qty, part_no, to_wh))
         cur.execute("""
-        INSERT INTO transfer_logs(part_no, transfer_qty, from_wh, to_wh, user)
+        INSERT INTO transfer_logs(transfer_log_part_no, transfer_log_qty,transfer_log_from_wh, transfer_log_to_wh, transfer_log_user)
         VALUES (?,?,?,?,?)
         """, (part_no, qty, from_wh, to_wh, user))
     log_fixture_activity(part_no, "transfer_stock", qty, from_wh=from_wh, to_wh=to_wh, user=user)
@@ -214,9 +212,10 @@ def consume_stock(part_no, qty, warehouse, user="", line="", purpose=""):
         cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty - ? WHERE part_no=? AND warehouse=?",
                     (qty, part_no, warehouse))
         cur.execute("""
-        INSERT INTO consumption_logs(part_no, consume_qty, warehouse, user, line, purpose)
-        VALUES (?,?,?,?,?,?)
-        """, (part_no, qty, warehouse, user, line, purpose))
+        INSERT INTO consumption_logs(consumption_log_part_no, consumption_log_qty,
+                                     consumption_log_warehouse, consumption_log_user)
+        VALUES (?,?,?,?)
+        """, (part_no, qty, warehouse, user))
     log_fixture_activity(part_no, "consume_stock", qty, from_wh=warehouse, user=user)
 
 def get_stock(part_no, warehouse):
@@ -335,10 +334,10 @@ def get_bom_by_part(parent_part_no: str):
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
-        SELECT bom_id, parent_part_no, child_part_no, bom_qty
+        SELECT fixture_bom_id, fixture_bom_parent_no, fixture_bom_child_no, fixture_bom_qty
         FROM fixture_boms
-        WHERE parent_part_no=?
-        ORDER BY bom_id
+        WHERE fixture_bom_parent_no=?
+        ORDER BY fixture_bom_id
         """, (parent_part_no,))
         return cur.fetchall()
 
@@ -348,21 +347,21 @@ def add_bom_item(parent_part_no: str, child_part_no: str, qty: int):
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("""
-        SELECT bom_id, bom_qty FROM fixture_boms
-        WHERE parent_part_no=? AND child_part_no=?
+        SELECT fixture_bom_id, fixture_bom_qty FROM fixture_boms
+        WHERE fixture_bom_parent_no=? AND fixture_bom_child_no=?
         """, (parent_part_no, child_part_no))
         row = cur.fetchone()
         if row:
             new_qty = row[1] + qty
-            cur.execute("UPDATE fixture_boms SET bom_qty=? WHERE bom_id=?", (new_qty, row[0]))
+            cur.execute("UPDATE fixture_boms SET fixture_bom_qty=? WHERE fixture_bom_id=?", (new_qty, row[0]))
         else:
             cur.execute("""
-            INSERT INTO fixture_boms(parent_part_no, child_part_no, bom_qty)
+            INSERT INTO fixture_boms(fixture_bom_parent_no, fixture_bom_child_no, fixture_bom_qty)
             VALUES (?,?,?)
             """, (parent_part_no, child_part_no, qty))
 
 def delete_bom_item(bom_id: int):
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("DELETE FROM fixture_boms WHERE bom_id=?", (bom_id,))
+        cur.execute("DELETE FROM fixture_boms WHERE fixture_bom_id=?", (bom_id,))
         conn.commit()

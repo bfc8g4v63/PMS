@@ -396,7 +396,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT product_code, product_name FROM issues")
+            cursor.execute("SELECT product_code, product_name FROM SOP")
             all_data = cursor.fetchall()
 
         for code, name in all_data:
@@ -540,7 +540,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
                     cursor = conn.cursor()
                     cursor.execute(
                         f"""
-                        UPDATE issues
+                        UPDATE SOP
                         SET {field_name} = ?, created_at = ?
                         WHERE product_code = ?
                         """,

@@ -34,16 +34,8 @@ from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from fixture_logs_tab import build_fixture_logs_tab
 from fixture_logger import ensure_fixture_log_schema 
-from config import USE_LOCAL_DB, DB_NAME, ORIGINAL_DB, LOCAL_DB_PATH, Z_DRIVE_DB, UNC_DB
+from config import USE_LOCAL_DB, DB_NAME, Z_DRIVE_DB, UNC_DB, ORIGINAL_DB, LOCAL_DB_PATH
 
-if not USE_LOCAL_DB:
-    DB_NAME = LOCAL_DB_PATH
-elif os.path.exists(Z_DRIVE_DB):
-    DB_NAME = Z_DRIVE_DB
-else:
-    DB_NAME = UNC_DB
-
-ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 print(f"使用資料庫：{DB_NAME}")
 set_db_path(DB_NAME)
 
@@ -134,16 +126,19 @@ def init_db(role):
 
 def sync_back_to_server():
     if USE_LOCAL_DB:
-        print("[偵測到本地開發模式] 跳過資料庫回寫")
+        print("[雲端模式] 所有操作直接寫入網路 DB，無需回寫")
         return
-    UNC_DB = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
-    Z_DRIVE_DB = r"Z:\PMS.db"
-    original = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
-    if DB_NAME == original:
+
+    if not os.path.exists(Z_DRIVE_DB):
+        print("偵測不到 Z: 掛載，跳過資料庫回寫")
+        return
+
+    if DB_NAME == Z_DRIVE_DB:
         print("無需回寫資料庫，因為 DB 實體與操作一致")
         return
+
     try:
-        shutil.copy(DB_NAME, original)
+        shutil.copy(DB_NAME, Z_DRIVE_DB)
         print("已同步本機資料庫回網路磁碟")
     except Exception as e:
         print(f"資料回寫失敗: {e}")
@@ -160,10 +155,10 @@ def logout_and_exit(root):
             _instance_lock.close()
         except:
             pass
-        if not USE_LOCAL_DB:
+        if USE_LOCAL_DB:
             sync_back_to_server()
         root.destroy()
-        sys.exit()
+        os._exit(0)
 
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -179,7 +174,7 @@ def login():
         "can_view_logs": 0,
         "can_delete_logs": 0,
         "can_upload_sop": 0,
-        "can_view_issues": 0,
+        "can_view_sop_info": 0,
         "can_manage_users": 0
     }
 
@@ -196,10 +191,8 @@ def login():
                 c = conn.cursor()
                 c.execute(
                     """
-                    SELECT role, can_add, can_delete, specialty,
-                           can_view_logs, can_delete_logs, can_upload_sop,
-                           can_view_issues, can_manage_users
-                    FROM users
+                    SELECT role, can_add, can_delete, specialty, can_view_logs, can_delete_logs, can_upload_sop, can_view_sop_info, can_manage_users
+                    FROM module_management
                     WHERE username=? AND password=? AND active=1
                     """,
                     (u, hashed_pw),
@@ -215,7 +208,7 @@ def login():
                         "can_view_logs": r[4],
                         "can_delete_logs": r[5],
                         "can_upload_sop": r[6],
-                        "can_view_issues": r[7],
+                        "can_view_sop_info": r[7],
                         "can_manage_users": r[8]
                     })
                     print("目前使用的 DB 檔案路徑：", DB_NAME)
@@ -307,7 +300,7 @@ def build_log_view_tab(tab, db_name, role):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            base_sql = "SELECT id, username, action, filename, timestamp FROM activity_logs"
+            base_sql = "SELECT activity_log_id, username, action, filename, timestamp FROM activity_logs"
             params = []
             if role in restricted_roles:
                 if keyword:
@@ -363,7 +356,7 @@ def build_log_view_tab(tab, db_name, role):
                 with get_conn() as conn:
                     cursor = conn.cursor()
                     for iid in selected:
-                        cursor.execute("DELETE FROM activity_logs WHERE id=?", (iid,))
+                        cursor.execute("DELETE FROM activity_logs WHERE activity_log_id=?", (iid,))
                     conn.commit()
                 refresh_logs()
 
@@ -383,8 +376,18 @@ def build_log_view_tab(tab, db_name, role):
 def initialize_database():
     with get_conn() as conn:
         cursor = conn.cursor()
+        cursor.execute(f"""
+            CREATE TABLE IF NOT EXISTS {LOG_TABLE} (
+                activity_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT,
+                action TEXT,
+                filename TEXT,
+                timestamp TEXT,
+                module TEXT
+            )
+        """)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS issues (
+            CREATE TABLE IF NOT EXISTS sop_information (
                 product_code TEXT PRIMARY KEY,
                 product_name TEXT,
                 dip_sop TEXT,
@@ -402,24 +405,19 @@ def initialize_database():
             )
         """)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS module_management (
                 username TEXT PRIMARY KEY,
                 password TEXT,
                 role TEXT DEFAULT 'user',
+                specialty TEXT DEFAULT '',
+                can_view_logs INTEGER DEFAULT 0,
+                can_delete_logs INTEGER DEFAULT 0,
+                can_upload_sop INTEGER DEFAULT 0,
+                can_view_sop_info INTEGER DEFAULT 0,
+                can_manage_users INTEGER DEFAULT 0,
                 can_add INTEGER DEFAULT 1,
                 can_delete INTEGER DEFAULT 0,
-                active INTEGER DEFAULT 1,
-                specialty TEXT DEFAULT ''
-            )
-        """)
-        cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS {LOG_TABLE} (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                action TEXT,
-                filename TEXT,
-                timestamp TEXT,
-                module TEXT
+                active INTEGER DEFAULT 1
             )
         """)
         conn.commit()
@@ -451,7 +449,7 @@ def save_file(file_path, target_folder, username, product_code=None, product_nam
 
 def update_sop_field(cursor, product_code, field_name, display_name):
     cursor.execute(
-        f"UPDATE issues SET {field_name}=?, created_at=? WHERE product_code=?",
+        f"UPDATE sop_information SET {field_name}=?, created_at=? WHERE product_code=?",
         (display_name, datetime.now().strftime("%Y%m%dT%H%M%S"), product_code)
     )
 
@@ -462,7 +460,7 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
 
     with get_conn() as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT product_name FROM issues WHERE product_code=?", (product_code,))
+        cursor.execute("SELECT product_name FROM sop_information WHERE product_code=?", (product_code,))
         result = cursor.fetchone()
         if result:
             product_name = result[0]
@@ -656,7 +654,7 @@ def create_main_interface(root, db_name, login_info):
 
             with get_conn() as conn:
                 cursor = conn.cursor()
-                cursor.execute("SELECT product_code FROM issues WHERE product_code=?", (code,))
+                cursor.execute("SELECT product_code FROM sop_information WHERE product_code=?", (code,))
                 if cursor.fetchone():
                     messagebox.showerror("錯誤", "料號已存在，請重新確認過。")
                     return
@@ -674,7 +672,7 @@ def create_main_interface(root, db_name, login_info):
                 if o_file: log_activity(user=current_user, action="upload", filename=o_file, module="SOP資訊")
 
                 cursor.execute("""
-                    INSERT INTO issues (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
+                    INSERT INTO sop_information (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     code, name, d_file, a_file, t_file, p_file, o_file,
@@ -754,7 +752,7 @@ def create_main_interface(root, db_name, login_info):
             cursor = conn.cursor()
             base_query = """
                 SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at
-                FROM issues
+                FROM sop_information
             """
             conditions = []
             params = []
@@ -802,7 +800,7 @@ def create_main_interface(root, db_name, login_info):
                     if sop_file:
                         display_name = f"{product_code}_{product_name}_{timestamp}"
                         cursor.execute(
-                            f"SELECT {bypass_fields[i - 2]} FROM issues WHERE product_code=?",
+                            f"SELECT {bypass_fields[i - 2]} FROM sop_information WHERE product_code=?",
                             (product_code,)
                         )
                         bypass = cursor.fetchone()
@@ -842,7 +840,7 @@ def create_main_interface(root, db_name, login_info):
             base_paths = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
             with get_conn() as conn:
                 cursor = conn.cursor()
-                cursor.execute(f"SELECT {target_field} FROM issues WHERE product_code=?", (product_code,))
+                cursor.execute(f"SELECT {target_field} FROM sop_information WHERE product_code=?", (product_code,))
                 result = cursor.fetchone()
                 if result and result[0]:
                     filename = result[0]
@@ -870,10 +868,10 @@ def create_main_interface(root, db_name, login_info):
     def toggle_bypass(product_code, field_name, bypass_field):
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute(f"SELECT {bypass_field} FROM issues WHERE product_code=?", (product_code,))
+            cursor.execute(f"SELECT {bypass_field} FROM sop_information WHERE product_code=?", (product_code,))
             current = cursor.fetchone()
             new_value = 0 if current and current[0] else 1
-            cursor.execute(f"UPDATE issues SET {bypass_field}=? WHERE product_code=?", (new_value, product_code))
+            cursor.execute(f"UPDATE sop_information SET {bypass_field}=? WHERE product_code=?", (new_value, product_code))
             conn.commit()
 
         log_activity(user=current_user, action="toggle_bypass", filename=f"{product_code}:{field_name}", module="SOP資訊")
@@ -917,7 +915,7 @@ def create_main_interface(root, db_name, login_info):
                     cursor = conn.cursor()
                     for item in selected_items:
                         product_code = str(tree.item(item)['values'][0]).zfill(8)
-                        cursor.execute("DELETE FROM issues WHERE product_code=?", (product_code,))
+                        cursor.execute("DELETE FROM sop_information WHERE product_code=?", (product_code,))
                         deleted_codes.append(product_code)
                     conn.commit()
                 for code in deleted_codes:
@@ -970,11 +968,11 @@ def open_password_change_window(parent, db_name, username):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (username, old_hash))
+            cursor.execute("SELECT password FROM module_management WHERE username=? AND password=?", (username, old_hash))
             if not cursor.fetchone():
                 messagebox.showerror("錯誤", "舊密碼不正確")
                 return
-            cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, username))
+            cursor.execute("UPDATE module_management SET password=? WHERE username=?", (new_hash, username))
             conn.commit()
 
         messagebox.showinfo("成功", "密碼已變更")

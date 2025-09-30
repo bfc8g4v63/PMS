@@ -18,14 +18,14 @@ def ensure_fixture_log_schema():
         cur = conn.cursor()
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fixture_logs (
-                sheet_id TEXT PRIMARY KEY,
-                part_no TEXT,
-                action TEXT,
-                change_qty INTEGER,
-                from_wh TEXT,
-                to_wh TEXT,
-                user TEXT,
-                timestamp TEXT
+                fixture_log_id TEXT PRIMARY KEY,
+                fixture_log_part_no TEXT,
+                fixture_log_action TEXT,
+                fixture_log_qty INTEGER,
+                fixture_log_from_wh TEXT,
+                fixture_log_to_wh TEXT,
+                fixture_log_user TEXT,
+                fixture_log_timestamp TEXT
             )
         """)
         conn.commit()
@@ -37,7 +37,7 @@ def generate_sheet_id(action_code: str) -> str:
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT sheet_id FROM fixture_logs WHERE sheet_id LIKE ? ORDER BY sheet_id DESC LIMIT 1",
+            "SELECT fixture_log_id FROM fixture_logs WHERE fixture_log_id LIKE ? ORDER BY fixture_log_id DESC LIMIT 1",
             (f"%{base}%",)
         )
         row = cur.fetchone()
@@ -56,7 +56,7 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO fixture_logs (sheet_id, part_no, action, change_qty, from_wh, to_wh, user, timestamp)
+            INSERT INTO fixture_logs (fixture_log_id, fixture_log_part_no, fixture_log_action, fixture_log_qty,fixture_log_from_wh, fixture_log_to_wh, fixture_log_user, fixture_log_timestamp)
             VALUES (?,?,?,?,?,?,?,?)
             """,
             (sheet_id, part_no, action_name, change_qty, from_wh, to_wh, user, ts),
@@ -65,33 +65,33 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
 
 def get_fixture_logs(part_no=None, user=None, action=None, limit=200):
     query = """
-        SELECT l.sheet_id,
-               l.part_no,
-               f.part_name,
-               f.part_spec,
-               l.action,
-               l.change_qty,
-               l.from_wh,
-               l.to_wh,
-               l.user,
-               l.timestamp
+        SELECT l.fixture_log_id,
+            l.fixture_log_part_no,
+            f.part_name,
+            f.part_spec,
+            l.fixture_log_action,
+            l.fixture_log_qty,
+            l.fixture_log_from_wh,
+            l.fixture_log_to_wh,
+            l.fixture_log_user,
+            l.fixture_log_timestamp
         FROM fixture_logs l
-        LEFT JOIN fixtures f ON l.part_no = f.part_no
+        LEFT JOIN fixtures f ON l.fixture_log_part_no = f.part_no
         WHERE 1=1
     """
     params = []
 
     if part_no:
-        query += " AND l.part_no LIKE ?"
+        query += " AND l.fixture_log_part_no LIKE ?"
         params.append(f"%{part_no}%")
     if user:
-        query += " AND l.user LIKE ?"
+        query += " AND l.fixture_log_user LIKE ?"
         params.append(f"%{user}%")
     if action:
-        query += " AND l.action=?"
+        query += " AND l.fixture_log_action=?"
         params.append(action)
 
-    query += " ORDER BY l.timestamp DESC LIMIT ?"
+    query += " ORDER BY l.fixture_log_timestamp DESC LIMIT ?"
     params.append(limit)
 
     with get_conn() as conn:
@@ -104,6 +104,6 @@ def delete_fixture_logs(ids=None):
         cur = conn.cursor()
         if ids:
             qmarks = ",".join("?" for _ in ids)
-            cur.execute(f"DELETE FROM fixture_logs WHERE sheet_id IN ({qmarks})", ids)
+            cur.execute(f"DELETE FROM fixture_logs WHERE fixture_log_id IN ({qmarks})", ids)
         else:
             cur.execute("DELETE FROM fixture_logs")

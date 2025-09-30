@@ -7,26 +7,28 @@ from db_helper import get_conn, DB_PATH
 def get_required_columns():
     return {
         "activity_logs": {
-            "id": "INTEGER",
+            "activity_log_id": "INTEGER",
             "username": "TEXT",
             "action": "TEXT",
             "filename": "TEXT",
             "timestamp": "TEXT",
             "module": "TEXT"
         },
-        "users": {
+        "module_management": {
+            "username": "TEXT",
+            "password": "TEXT",
             "role": "TEXT",
             "specialty": "TEXT",
-            "can_add": "INTEGER DEFAULT 0",
-            "can_delete": "INTEGER DEFAULT 0",
-            "can_view_logs": "INTEGER DEFAULT 0",
-            "can_delete_logs": "INTEGER DEFAULT 0",
-            "can_upload_sop": "INTEGER DEFAULT 0",
-            "can_view_issues": "INTEGER DEFAULT 0",
-            "can_manage_users": "INTEGER DEFAULT 0",
-            "active": "INTEGER DEFAULT 1"
+            "can_add": "INTEGER",
+            "can_delete": "INTEGER",
+            "can_view_logs": "INTEGER",
+            "can_delete_logs": "INTEGER",
+            "can_upload_sop": "INTEGER",
+            "can_view_sop_info": "INTEGER",
+            "can_manage_users": "INTEGER",
+            "active": "INTEGER"
         },
-        "issues": {
+        "sop_information": {
             "product_code": "TEXT",
             "product_name": "TEXT",
             "dip_sop": "TEXT",
@@ -36,16 +38,16 @@ def get_required_columns():
             "oqc_checklist": "TEXT",
             "created_by": "TEXT",
             "created_at": "TEXT",
-            "dip_sop_bypass": "INTEGER DEFAULT 0",
-            "assembly_sop_bypass": "INTEGER DEFAULT 0",
-            "test_sop_bypass": "INTEGER DEFAULT 0",
-            "packaging_sop_bypass": "INTEGER DEFAULT 0",
-            "oqc_checklist_bypass": "INTEGER DEFAULT 0"
+            "dip_sop_bypass": "INTEGER",
+            "assembly_sop_bypass": "INTEGER",
+            "test_sop_bypass": "INTEGER",
+            "packaging_sop_bypass": "INTEGER",
+            "oqc_checklist_bypass": "INTEGER"
         },
-        "changelog": {
-            "version": "TEXT NOT NULL",
-            "date": "TEXT NOT NULL",
-            "content": "TEXT NOT NULL"
+        "change_log": {
+            "version": "TEXT",
+            "date": "TEXT",
+            "content": "TEXT"
         }
     }
 
@@ -74,20 +76,19 @@ def ensure_changelog_schema(db_path=None, verbose=False):
     with get_conn(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS changelog (
-                sheet_id TEXT PRIMARY KEY,
-                version TEXT NOT NULL,
+            CREATE TABLE IF NOT EXISTS change_log (
+                version TEXT PRIMARY KEY,
                 date TEXT NOT NULL,
                 content TEXT NOT NULL
             )
         """)
-        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_changelog_version ON changelog(version);")
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_changelog_version ON change_log(version);")
         conn.commit()
 
 def get_next_changelog_version(db_path=None):
     with get_conn(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT version FROM changelog")
+        cursor.execute("SELECT DISTINCT version FROM change_log")
         versions = [row[0] for row in cursor.fetchall()]
 
     pattern = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
@@ -134,10 +135,7 @@ def add_col_if_missing(conn, table: str, col: str, col_type: str):
     cur.execute(f"PRAGMA table_info({table})")
     cols = [row[1] for row in cur.fetchall()]
     if col not in cols:
-        if "CURRENT_TIMESTAMP" in col_type.upper():
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} TIMESTAMP")
-        else:
-            cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
+        cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
     cur.close()
 
 def ensure_fixture_schema(db_path=None, verbose=False):
@@ -156,13 +154,6 @@ def ensure_fixture_schema(db_path=None, verbose=False):
                 storage_location TEXT
             )
         """)
-        add_col_if_missing(conn, "fixtures", "part_name", "TEXT")
-        add_col_if_missing(conn, "fixtures", "part_spec", "TEXT")
-        add_col_if_missing(conn, "fixtures", "part_group", "TEXT")
-        add_col_if_missing(conn, "fixtures", "unit_price_ntd", "REAL")
-        add_col_if_missing(conn, "fixtures", "unit_price_usd", "REAL")
-        add_col_if_missing(conn, "fixtures", "safety_stock", "INTEGER")
-        add_col_if_missing(conn, "fixtures", "storage_location", "TEXT")
         if verbose:
             cur.execute("PRAGMA table_info(fixtures)")
             print("fixtures:", [r[1] for r in cur.fetchall()])
@@ -176,48 +167,34 @@ def ensure_fixture_schema(db_path=None, verbose=False):
                 PRIMARY KEY (part_no, warehouse)
             )
         """)
-        add_col_if_missing(conn, "warehouse_stock", "part_no", "TEXT")
-        add_col_if_missing(conn, "warehouse_stock", "warehouse", "TEXT")
-        add_col_if_missing(conn, "warehouse_stock", "usable_qty", "INTEGER DEFAULT 0")
-        add_col_if_missing(conn, "warehouse_stock", "safety_stock", "INTEGER DEFAULT 0")
         if verbose:
             cur.execute("PRAGMA table_info(warehouse_stock)")
             print("warehouse_stock:", [r[1] for r in cur.fetchall()])
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS transfer_logs (
-                sheet_id TEXT PRIMARY KEY,
+                transfer_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 part_no TEXT,
                 from_wh TEXT,
                 to_wh TEXT,
-                usable_qty INTEGER,
-                user TEXT,
+                transfer_qty INTEGER,
+                username TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        add_col_if_missing(conn, "transfer_logs", "part_no", "TEXT")
-        add_col_if_missing(conn, "transfer_logs", "from_wh", "TEXT")
-        add_col_if_missing(conn, "transfer_logs", "to_wh", "TEXT")
-        add_col_if_missing(conn, "transfer_logs", "usable_qty", "INTEGER")
-        add_col_if_missing(conn, "transfer_logs", "user", "TEXT")
-        add_col_if_missing(conn, "transfer_logs", "created_at", "TIMESTAMP")
         if verbose:
             cur.execute("PRAGMA table_info(transfer_logs)")
             print("transfer_logs:", [r[1] for r in cur.fetchall()])
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fixture_boms (
-                sheet_id TEXT PRIMARY KEY,
+                bom_id INTEGER PRIMARY KEY AUTOINCREMENT,
                 parent_part_no TEXT,
                 child_part_no TEXT,
                 bom_qty INTEGER DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        add_col_if_missing(conn, "fixture_boms", "parent_part_no", "TEXT")
-        add_col_if_missing(conn, "fixture_boms", "child_part_no", "TEXT")
-        add_col_if_missing(conn, "fixture_boms", "bom_qty", "INTEGER DEFAULT 1")
-        add_col_if_missing(conn, "fixture_boms", "created_at", "TIMESTAMP")
         if verbose:
             cur.execute("PRAGMA table_info(fixture_boms)")
             print("fixture_boms:", [r[1] for r in cur.fetchall()])

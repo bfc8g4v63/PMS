@@ -18,9 +18,9 @@ Z_DRIVE_DB = r"Z:\PMS.db"
 UNC_DB = os.path.join(BASE_NETWORK_PATH, "PMS.db")
 
 if USE_LOCAL_DB:
-    DB_NAME = LOCAL_DB_PATH
-else:
     DB_NAME = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
+else:
+    DB_NAME = LOCAL_DB_PATH
 
 ORIGINAL_DB = Z_DRIVE_DB if os.path.exists(Z_DRIVE_DB) else UNC_DB
 

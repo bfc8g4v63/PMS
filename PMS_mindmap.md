@@ -324,8 +324,8 @@
 
   * [x] fixtures：part\_no, part\_name, part\_spec, part\_group, unit\_price\_ntd, unit\_price\_usd, safety\_stock, storage\_location
   * [x] warehouse\_stock：part\_no, warehouse, usable\_qty, safety\_stock
-  * [x] issues：product\_code, product\_name, dip\_sop, assembly\_sop, test\_sop, packaging\_sop, oqc\_checklist
-  * [x] users：username, password, role, specialty, can\_view\_logs, can\_delete\_logs, can\_upload\_sop, can\_view\_issues, can\_manage\_users
+  * [x] SOP：product\_code, product\_name, dip\_sop, assembly\_sop, test\_sop, packaging\_sop, oqc\_checklist
+  * [x] users：username, password, role, specialty, can\_view\_logs, can\_delete\_logs, can\_upload\_sop, can\_view\_SOP, can\_manage\_users
   * [x] activity\_logs：id, username, action, filename, timestamp, module
   * [x] transfer\_logs：id, part\_no, from\_wh, to\_wh, transfer\_qty, user, remark, created\_at
   * [x] consumption\_logs：id, part\_no, warehouse, consume\_qty, user, remark, created\_at
