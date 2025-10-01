@@ -192,7 +192,7 @@ def login():
                 c.execute(
                     """
                     SELECT role, can_add, can_delete, specialty, can_view_logs, can_delete_logs, can_upload_sop, can_view_sop_info, can_manage_users
-                    FROM module_management
+                    FROM users
                     WHERE username=? AND password=? AND active=1
                     """,
                     (u, hashed_pw),
@@ -249,7 +249,7 @@ def login():
     return result
 
 def build_log_view_tab(tab, db_name, role):
-    tk.Label(tab, text="操作紀錄查詢").pack(anchor="w", padx=10, pady=(10, 0))
+    tk.Label(tab, text="SOP紀錄查詢").pack(anchor="w", padx=10, pady=(10, 0))
 
     search_frame = tk.Frame(tab)
     search_frame.pack(fill="x", padx=10, pady=5)
@@ -270,10 +270,10 @@ def build_log_view_tab(tab, db_name, role):
     tree = ttk.Treeview(tab, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
-        tree.column("SOP建立人", width=60, anchor="center")
-        tree.column("動作", width=60, anchor="center")
-        tree.column("檔案名稱", width=500)
-        tree.column("時間", width=60, anchor="center")
+    tree.column("SOP建立人", width=80, anchor="center")
+    tree.column("動作", width=80, anchor="center")
+    tree.column("檔案名稱", width=400, anchor="w")
+    tree.column("時間", width=140, anchor="center")
     tree.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
     def refresh_logs():
@@ -300,29 +300,33 @@ def build_log_view_tab(tab, db_name, role):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            base_sql = "SELECT activity_log_id, username, action, filename, timestamp FROM activity_logs"
+            base_sql = """SELECT activity_log_id, activity_log_username, 
+                                 activity_log_action, activity_log_filename, 
+                                 activity_log_timestamp 
+                          FROM activity_logs"""
             params = []
             if role in restricted_roles:
                 if keyword:
-                    base_sql += " WHERE (username LIKE ? OR action LIKE ? OR filename LIKE ?) AND action NOT IN ({})".format(
+                    base_sql += " WHERE (activity_log_username LIKE ? OR activity_log_action LIKE ? OR activity_log_filename LIKE ?) AND activity_log_action NOT IN ({})".format(
                         ",".join("?" for _ in restricted_keywords)
                     )
                     params = [f"%{keyword}%"] * 3 + list(restricted_keywords)
                 else:
-                    base_sql += " WHERE action NOT IN ({})".format(
+                    base_sql += " WHERE activity_log_action NOT IN ({})".format(
                         ",".join("?" for _ in restricted_keywords)
                     )
                     params = list(restricted_keywords)
             else:
                 if keyword:
-                    base_sql += " WHERE username LIKE ? OR action LIKE ? OR filename LIKE ?"
+                    base_sql += " WHERE activity_log_username LIKE ? OR activity_log_action LIKE ? OR activity_log_filename LIKE ?"
                     params = [f"%{keyword}%"] * 3
 
-            base_sql += f" ORDER BY timestamp {'DESC' if sort_desc.get() else 'ASC'}"
+            base_sql += f" ORDER BY activity_log_timestamp {'DESC' if sort_desc.get() else 'ASC'}"
             cursor.execute(base_sql, params)
             for row in cursor.fetchall():
+                log_id = row[0] if row[0] is not None else f"temp_{row[4]}"
                 action_display = ACTION_MAP_LOCAL.get(row[2], row[2])
-                tree.insert("", "end", iid=row[0], values=(row[1], action_display, row[3], row[4]))
+                tree.insert("", "end", iid=str(log_id), values=(row[1], action_display, row[3], row[4]))
 
     def on_double_click(event):
         item = tree.identify_row(event.y)
@@ -350,9 +354,9 @@ def build_log_view_tab(tab, db_name, role):
         def delete_selected_log():
             selected = tree.selection()
             if not selected:
-                messagebox.showwarning("提醒", "請先選取一筆操作紀錄")
+                messagebox.showwarning("提醒", "請先選取一筆SOP紀錄")
                 return
-            if messagebox.askyesno("確認", "確定要刪除所選操作紀錄？"):
+            if messagebox.askyesno("確認", "確定要刪除所選SOP紀錄？"):
                 with get_conn() as conn:
                     cursor = conn.cursor()
                     for iid in selected:
@@ -361,7 +365,7 @@ def build_log_view_tab(tab, db_name, role):
                 refresh_logs()
 
         def delete_all_logs():
-            if messagebox.askyesno("確認", "確定要刪除所有操作紀錄？此操作無法復原。"):
+            if messagebox.askyesno("確認", "確定要刪除所有SOP紀錄？此操作無法復原。"):
                 with get_conn() as conn:
                     cursor = conn.cursor()
                     cursor.execute("DELETE FROM activity_logs")
@@ -379,11 +383,11 @@ def initialize_database():
         cursor.execute(f"""
             CREATE TABLE IF NOT EXISTS {LOG_TABLE} (
                 activity_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                action TEXT,
-                filename TEXT,
-                timestamp TEXT,
-                module TEXT
+                activity_log_username TEXT,
+                activity_log_action TEXT,
+                activity_log_filename TEXT,
+                activity_log_timestamp TEXT,
+                activity_log_module TEXT
             )
         """)
         cursor.execute("""
@@ -405,7 +409,7 @@ def initialize_database():
             )
         """)
         cursor.execute("""
-            CREATE TABLE IF NOT EXISTS module_management (
+            CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY,
                 password TEXT,
                 role TEXT DEFAULT 'user',
@@ -550,6 +554,7 @@ def create_main_interface(root, db_name, login_info):
     tabs = {
         "SOP資訊": tk.Frame(notebook),
         "SOP生成": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
+        "SOP紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None,
         "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "治具紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
@@ -557,7 +562,6 @@ def create_main_interface(root, db_name, login_info):
         "治具損耗": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "異常平台": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
-        "操作紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None,
         "改版歷程": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
     }
 
@@ -593,8 +597,8 @@ def create_main_interface(root, db_name, login_info):
         build_user_management_tab(tabs["帳號管理"], db_name, login_info)
 
     if current_role in ("admin", "engineer", "leader"):
-        if tabs.get("操作紀錄"):
-            build_log_view_tab(tabs["操作紀錄"], db_name, current_role)
+        if tabs.get("SOP紀錄"):
+            build_log_view_tab(tabs["SOP紀錄"], db_name, current_role)
         if tabs.get("改版歷程"):
             build_changelog_tab(tabs["改版歷程"], current_role, db_name)
 
@@ -968,11 +972,11 @@ def open_password_change_window(parent, db_name, username):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT password FROM module_management WHERE username=? AND password=?", (username, old_hash))
+            cursor.execute("SELECT password FROM users WHERE username=? AND password=?", (username, old_hash))
             if not cursor.fetchone():
                 messagebox.showerror("錯誤", "舊密碼不正確")
                 return
-            cursor.execute("UPDATE module_management SET password=? WHERE username=?", (new_hash, username))
+            cursor.execute("UPDATE users SET password=? WHERE username=?", (new_hash, username))
             conn.commit()
 
         messagebox.showinfo("成功", "密碼已變更")

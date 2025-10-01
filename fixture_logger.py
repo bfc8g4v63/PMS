@@ -33,20 +33,11 @@ def ensure_fixture_log_schema():
 def generate_sheet_id(action_code: str) -> str:
     prefix, _ = FIXTURE_ACTION_MAP.get(action_code, ("Z", action_code))
     ym = datetime.now().strftime("%y%m")
-    base = f"{ym}"
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT fixture_log_id FROM fixture_logs WHERE fixture_log_id LIKE ? ORDER BY fixture_log_id DESC LIMIT 1",
-            (f"%{base}%",)
-        )
-        row = cur.fetchone()
-        if row:
-            last_seq = int(row[0][-5:])
-            next_seq = last_seq + 1
-        else:
-            next_seq = 1
-    return f"{prefix}{ym}{next_seq:05d}"
+        cur.execute("SELECT COUNT(*) FROM fixture_logs WHERE fixture_log_id LIKE ?", (f"{prefix}{ym}%",))
+        count = cur.fetchone()[0] or 0
+    return f"{prefix}{ym}{count+1:04d}"
 
 def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", user=""):
     prefix, action_name = FIXTURE_ACTION_MAP.get(action, ("Z", action))
@@ -56,7 +47,9 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO fixture_logs (fixture_log_id, fixture_log_part_no, fixture_log_action, fixture_log_qty,fixture_log_from_wh, fixture_log_to_wh, fixture_log_user, fixture_log_timestamp)
+            INSERT INTO fixture_logs (fixture_log_id, fixture_log_part_no, fixture_log_action,
+                                      fixture_log_qty, fixture_log_from_wh, fixture_log_to_wh,
+                                      fixture_log_user, fixture_log_timestamp)
             VALUES (?,?,?,?,?,?,?,?)
             """,
             (sheet_id, part_no, action_name, change_qty, from_wh, to_wh, user, ts),
@@ -66,15 +59,15 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
 def get_fixture_logs(part_no=None, user=None, action=None, limit=200):
     query = """
         SELECT l.fixture_log_id,
-            l.fixture_log_part_no,
-            f.part_name,
-            f.part_spec,
-            l.fixture_log_action,
-            l.fixture_log_qty,
-            l.fixture_log_from_wh,
-            l.fixture_log_to_wh,
-            l.fixture_log_user,
-            l.fixture_log_timestamp
+               l.fixture_log_part_no,
+               f.part_name,
+               f.part_spec,
+               l.fixture_log_action,
+               l.fixture_log_qty,
+               l.fixture_log_from_wh,
+               l.fixture_log_to_wh,
+               l.fixture_log_user,
+               l.fixture_log_timestamp
         FROM fixture_logs l
         LEFT JOIN fixtures f ON l.fixture_log_part_no = f.part_no
         WHERE 1=1

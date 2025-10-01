@@ -37,16 +37,27 @@ ACTION_MAP = {
 }
 
 def log_activity(user, action, filename, module=None):
-
     action = ACTION_MAP.get(action, action)
     with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute(
             """
-            INSERT INTO activity_logs (username, action, filename, timestamp, module)
+            INSERT INTO activity_logs (
+                activity_log_username, 
+                activity_log_action, 
+                activity_log_filename, 
+                activity_log_timestamp, 
+                activity_log_module
+            )
             VALUES (?, ?, ?, ?, ?)
             """,
-            (user, action, filename, datetime.now().strftime("%Y%m%dT%H%M%S"), module),
+            (
+                user,
+                action,
+                filename,
+                datetime.now().strftime("%Y%m%dT%H%M%S"),
+                module,
+            ),
         )
         conn.commit()
 

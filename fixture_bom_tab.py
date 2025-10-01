@@ -29,16 +29,20 @@ def build_fixture_bom_tab(parent, current_user=None):
     entry_qty = ttk.Entry(form, width=20)
     entry_qty.grid(row=2, column=1, padx=3, pady=2)
 
-    tree = ttk.Treeview(frame, columns=("bom_id","parent_part_no","child_part_no","bom_qty"), show="headings")
-    tree.heading("bom_id", text="ID")
-    tree.heading("parent_part_no", text="主料號")
-    tree.heading("child_part_no", text="子料號")
-    tree.heading("bom_qty", text="數量")
+    tree = ttk.Treeview(
+        frame,
+        columns=("fixture_bom_id","fixture_bom_parent_no","fixture_bom_child_no","fixture_bom_qty"),
+        show="headings"
+    )
+    tree.heading("fixture_bom_id", text="BOM ID")
+    tree.heading("fixture_bom_parent_no", text="主料號")
+    tree.heading("fixture_bom_child_no", text="子料號")
+    tree.heading("fixture_bom_qty", text="數量")
 
-    tree.column("bom_id", width=80, anchor="center")
-    tree.column("parent_part_no", width=120, anchor="center")
-    tree.column("child_part_no", width=120, anchor="center")
-    tree.column("bom_qty", width=80, anchor="center")
+    tree.column("fixture_bom_id", width=150, anchor="center")
+    tree.column("fixture_bom_parent_no", width=120, anchor="center")
+    tree.column("fixture_bom_child_no", width=120, anchor="center")
+    tree.column("fixture_bom_qty", width=80, anchor="center")
     tree.pack(fill="both", expand=True, padx=5, pady=5)
 
     def refresh_tree():
@@ -75,8 +79,8 @@ def build_fixture_bom_tab(parent, current_user=None):
             messagebox.showerror("錯誤", f"子料號 {child_no} 不存在於治具清單")
             return
         try:
-            add_bom_item(parent_no, child_no, qty)
-            messagebox.showinfo("完成", f"{parent_no} 新增 BOM 子料號 {child_no} x{qty}")
+            bom_id = add_bom_item(parent_no, child_no, qty)
+            messagebox.showinfo("完成", f"{parent_no} 新增 BOM 子料號 {child_no} x{qty} (ID={bom_id})")
             refresh_tree()
             entry_child.delete(0, tk.END)
             entry_qty.delete(0, tk.END)
@@ -91,7 +95,7 @@ def build_fixture_bom_tab(parent, current_user=None):
         if not messagebox.askyesno("確認", f"確定刪除 BOM ID={bom_id}？"):
             return
         try:
-            delete_bom_item(int(bom_id))
+            delete_bom_item(bom_id)
             messagebox.showinfo("完成", f"BOM ID {bom_id} 已刪除")
             refresh_tree()
         except Exception as e:

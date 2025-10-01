@@ -27,41 +27,40 @@ def build_fixture_logs_tab(frame, refresh_only=False):
     action_combo.grid(row=0, column=5, padx=5, pady=2)
 
     columns = (
-    "id",
-    "治具料號",
-    "治具品名",
-    "治具規格",
-    "動作",
-    "異動數量",
-    "來源倉",
-    "目標倉",
-    "治具操作人",
-    "時間"
-)
+        "單號",
+        "治具料號",
+        "治具品名",
+        "治具規格",
+        "動作",
+        "異動數量",
+        "來源倉",
+        "目標倉",
+        "治具操作人",
+        "時間"
+    )
 
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
         if col == "治具料號":
-            tree.column(col, width=50, anchor="center")
-        elif col == "治具品名":
-            tree.column(col, width=280, anchor="center")
-        elif col == "治具規格":
-            tree.column(col, width=280, anchor="center")
+            tree.column(col, width=80, anchor="center")
+        elif col in ("治具品名", "治具規格"):
+            tree.column(col, width=180, anchor="center")
         elif col == "動作":
-            tree.column(col, width=30, anchor="center")
+            tree.column(col, width=80, anchor="center")
         elif col == "異動數量":
-            tree.column(col, width=30, anchor="center")
+            tree.column(col, width=80, anchor="center")
         elif col in ("來源倉", "目標倉"):
-            tree.column(col, width=30, anchor="center")
-        elif col == "治具操作人":
-            tree.column(col, width=40, anchor="center")
-        elif col == "時間":
             tree.column(col, width=100, anchor="center")
+        elif col == "治具操作人":
+            tree.column(col, width=100, anchor="center")
+        elif col == "時間":
+            tree.column(col, width=150, anchor="center")
+        elif col == "單號":
+            tree.column(col, width=120, anchor="center")
         else:
             tree.column(col, width=100, anchor="center")
 
-    tree.column("id", width=0, stretch=False)
     tree.pack(fill="both", expand=True, padx=5, pady=5)
 
     def on_query():

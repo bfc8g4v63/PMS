@@ -16,8 +16,8 @@ def build_user_management_tab(tab, db_name, current_user):
         "can_add": {"label": "新增", "default": 1},
         "can_delete": {"label": "刪除", "default": 0},
         "active": {"label": "啟用", "default": 1},
-        "can_view_logs": {"label": "可見操作紀錄", "default": 1},
-        "can_delete_logs": {"label": "刪除操作紀錄", "default": 0},
+        "can_view_logs": {"label": "可見SOP紀錄", "default": 1},
+        "can_delete_logs": {"label": "刪除SOP紀錄", "default": 0},
         "can_upload_sop": {"label": "上傳SOP", "default": 1},
         "can_view_sop_info": {"label": "可見SOP資訊", "default": 1},
         "can_manage_users": {"label": "帳號管理", "default": 0}
@@ -42,7 +42,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Button(control_frame, text="↕排序帳號", command=toggle_sort).pack(side="left")
 
-    columns = ("帳號", "角色", "新增", "刪除", "啟用", "上傳SOP", "可見紀錄", "刪除紀錄", "可見SOP", "帳號管理")
+    columns = ("帳號", "角色", "新增", "刪除", "啟用", "上傳SOP", "SOP紀錄", "刪除紀錄", "SOP資訊", "帳號管理")
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
@@ -54,9 +54,11 @@ def build_user_management_tab(tab, db_name, current_user):
             tree.delete(row)
         with get_conn() as conn:
             cursor = conn.cursor()
-            sql = """SELECT username, role, can_add, can_delete, active,
+            sql = """SELECT username, role,
+                can_add, can_delete, active,
                 can_upload_sop, can_view_logs, can_delete_logs,
-                can_view_sop_info, can_manage_users FROM module_management"""
+                can_view_sop_info, can_manage_users
+                FROM users"""
             condition = filter_var.get()
             if condition == "僅啟用":
                 sql += " WHERE active=1"
@@ -139,14 +141,14 @@ def build_user_management_tab(tab, db_name, current_user):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT username FROM module_management WHERE username=?", (new_user,))
+            cursor.execute("SELECT username FROM users WHERE username=?", (new_user,))
             if cursor.fetchone():
                 messagebox.showerror("錯誤", "該使用者已存在")
                 return
 
             fields = ["username", "password", "role", "specialty"] + list(permission_vars.keys())
             placeholders = ", ".join(["?"] * len(fields))
-            sql = f"INSERT INTO module_management ({', '.join(fields)}) VALUES ({placeholders})"
+            sql = f"INSERT INTO users ({', '.join(fields)}) VALUES ({placeholders})"
             values = [new_user, hashed_pw, role, specialty_var.get()] + [permission_vars[k].get() for k in permission_vars]
             cursor.execute(sql, values)
             conn.commit()
@@ -198,13 +200,13 @@ def build_user_management_tab(tab, db_name, current_user):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT specialty FROM module_management WHERE username=?", (username,))
+            cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
             specialty = cursor.fetchone()
             edit_specialty.set(specialty[0] if specialty else "")
 
             cursor.execute(f"""
                 SELECT {', '.join(permission_vars.keys())}
-                FROM module_management WHERE username=?
+                FROM users WHERE username=?
             """, (username,))
             result = cursor.fetchone()
             if result:
@@ -234,11 +236,11 @@ def build_user_management_tab(tab, db_name, current_user):
             cursor = conn.cursor()
 
             if new_username and new_username != original_username:
-                cursor.execute("SELECT username FROM module_management WHERE username=?", (new_username,))
+                cursor.execute("SELECT username FROM users WHERE username=?", (new_username,))
                 if cursor.fetchone():
                     messagebox.showerror("錯誤", "新帳號名稱已存在")
                     return
-                cursor.execute("UPDATE module_management SET username=? WHERE username=?", (new_username, original_username))
+                cursor.execute("UPDATE users SET username=? WHERE username=?", (new_username, original_username))
                 original_username = new_username
 
             if new_pass:
@@ -247,7 +249,7 @@ def build_user_management_tab(tab, db_name, current_user):
                     return
                 hashed_pw = hash_password(new_pass)
                 cursor.execute("""
-                    UPDATE module_management SET password=?, role=?, specialty=?,
+                    UPDATE users SET password=?, role=?, specialty=?,
                         can_add=?, can_delete=?, active=?,
                         can_view_logs=?, can_delete_logs=?, can_upload_sop=?,
                         can_view_sop_info=?, can_manage_users=?
@@ -261,7 +263,7 @@ def build_user_management_tab(tab, db_name, current_user):
                 ))
             else:
                 cursor.execute("""
-                    UPDATE module_management SET role=?, specialty=?,
+                    UPDATE users SET role=?, specialty=?,
                         can_add=?, can_delete=?, active=?,
                         can_view_logs=?, can_delete_logs=?, can_upload_sop=?,
                         can_view_sop_info=?, can_manage_users=?
@@ -293,7 +295,7 @@ def build_user_management_tab(tab, db_name, current_user):
         if messagebox.askyesno("確認", f"是否確定要刪除帳號「{username}」？"):
             with get_conn() as conn:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM module_management WHERE username=?", (username,))
+                cursor.execute("DELETE FROM users WHERE username=?", (username,))
                 conn.commit()
             messagebox.showinfo("成功", "使用者已刪除")
             log_activity(user=current_user["user"], action="delete_user", filename=username, module="帳號管理")

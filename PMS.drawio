@@ -192,7 +192,7 @@
         <mxCell id="VIas7DstL4jLXsS-fGNQ-107" value="DB管理&#xa;&#xa;DB 管理&#xa;切換 Dev/正式、備份/還原、WAL" style="shape=process;whiteSpace=wrap;align=center;verticalAlign=middle;size=0.0475;fontStyle=1;strokeWidth=3;fillColor=#FFCCCC;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;flipH=0;flipV=0;" parent="1" vertex="1">
           <mxGeometry x="1283" y="709.5" width="400" height="91" as="geometry" />
         </mxCell>
-        <mxCell id="VIas7DstL4jLXsS-fGNQ-111" value="操作紀錄 / 版本追溯&#xa;&#xa;可溯性" style="shape=process;whiteSpace=wrap;align=center;verticalAlign=middle;size=0.0475;fontStyle=1;strokeWidth=3;fillColor=#FFCCCC;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;flipH=0;flipV=0;" parent="1" vertex="1">
+        <mxCell id="VIas7DstL4jLXsS-fGNQ-111" value="SOP紀錄 / 版本追溯&#xa;&#xa;可溯性" style="shape=process;whiteSpace=wrap;align=center;verticalAlign=middle;size=0.0475;fontStyle=1;strokeWidth=3;fillColor=#FFCCCC;movable=1;resizable=1;rotatable=1;deletable=1;editable=1;locked=0;connectable=1;flipH=0;flipV=0;" parent="1" vertex="1">
           <mxGeometry x="1283" y="594" width="400" height="91" as="geometry" />
         </mxCell>
         <mxCell id="VIas7DstL4jLXsS-fGNQ-113" value="" style="strokeColor=#990000;strokeWidth=2;rounded=1;endArrow=classicThin;endFill=1;startArrow=classicThin;startFill=1;edgeStyle=orthogonalEdgeStyle;entryX=1;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="1" source="VIas7DstL4jLXsS-fGNQ-21" target="VIas7DstL4jLXsS-fGNQ-17" edge="1">

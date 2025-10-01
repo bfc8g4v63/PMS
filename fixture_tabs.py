@@ -72,7 +72,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
             messagebox.showerror("錯誤","單價或安全庫存格式錯誤"); return
 
         try:
-            loc_fmt = loc_raw
+            loc_fmt = validate_location(part_no, loc_raw)
         except Exception as e:
             messagebox.showerror("錯誤", str(e)); return
 
@@ -172,7 +172,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
         except:
             messagebox.showerror("錯誤","單價或安全庫存格式錯誤"); return
         try:
-            loc_fmt = loc_raw
+            loc_fmt = validate_location(part_no, loc_raw)
         except Exception as e:
             messagebox.showerror("錯誤", str(e)); return
         try:
@@ -250,6 +250,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
             wb.remove(wb["Sheet"])
         wb.save(file)
         messagebox.showinfo("完成", f"已匯出 Excel：{file}")
+
     def on_generate_location():
         prefix = entries["儲位"].get().strip()
         try:
@@ -259,6 +260,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
             messagebox.showinfo("完成", f"自動生成儲位：{loc}")
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
+
     ttk.Button(form, text="建立治具", command=on_add_fixture).grid(row=0, column=2, padx=5)
     ttk.Button(form, text="刪除治具", command=on_delete_fixture).grid(row=1, column=2, padx=5)
     ttk.Button(form, text="⚙修改資料", command=on_update_fixture).grid(row=6, column=2, padx=5)

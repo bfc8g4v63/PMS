@@ -14,7 +14,7 @@ def get_conn(path: str = None):
     target = path or DB_PATH
     if not target:
         raise ValueError("DB_PATH 尚未設定，請先呼叫 set_db_path()")
-    conn = sqlite3.connect(target, timeout=5, isolation_level=None)
+    conn = sqlite3.connect(target, isolation_level=None)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA foreign_keys = ON;")
@@ -25,6 +25,7 @@ def get_conn(path: str = None):
 def tx(path: str = None):
     conn = get_conn(path)
     try:
+        conn.execute("BEGIN;")
         yield conn
         conn.commit()
     except:
@@ -34,16 +35,14 @@ def tx(path: str = None):
         conn.close()
 
 def db_execute(sql: str, params: tuple = ()):
-    with get_conn() as conn:
+    with tx() as conn:
         cur = conn.cursor()
         cur.execute(sql, params)
-        conn.commit()
 
 def db_executemany(sql: str, seq):
-    with get_conn() as conn:
+    with tx() as conn:
         cur = conn.cursor()
         cur.executemany(sql, seq)
-        conn.commit()
 
 def db_query_all(sql: str, params: tuple = ()):
     with get_conn() as conn:

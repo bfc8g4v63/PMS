@@ -8,13 +8,13 @@ def get_required_columns():
     return {
         "activity_logs": {
             "activity_log_id": "INTEGER",
-            "username": "TEXT",
-            "action": "TEXT",
-            "filename": "TEXT",
-            "timestamp": "TEXT",
-            "module": "TEXT"
+            "activity_log_username": "TEXT",
+            "activity_log_action": "TEXT",
+            "activity_log_filename": "TEXT",
+            "activity_log_timestamp": "TEXT",
+            "activity_log_module": "TEXT"
         },
-        "module_management": {
+        "users": {
             "username": "TEXT",
             "password": "TEXT",
             "role": "TEXT",
@@ -151,7 +151,8 @@ def ensure_fixture_schema(db_path=None, verbose=False):
                 unit_price_ntd REAL,
                 unit_price_usd REAL,
                 safety_stock INTEGER,
-                storage_location TEXT
+                storage_location TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         if verbose:
@@ -173,13 +174,13 @@ def ensure_fixture_schema(db_path=None, verbose=False):
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS transfer_logs (
-                transfer_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                part_no TEXT,
-                from_wh TEXT,
-                to_wh TEXT,
-                transfer_qty INTEGER,
-                username TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                transfer_log_id TEXT PRIMARY KEY,
+                transfer_log_part_no TEXT,
+                transfer_log_from_wh TEXT,
+                transfer_log_to_wh TEXT,
+                transfer_log_qty INTEGER,
+                transfer_log_user TEXT,
+                transfer_log_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         if verbose:
@@ -188,11 +189,11 @@ def ensure_fixture_schema(db_path=None, verbose=False):
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS fixture_boms (
-                bom_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                parent_part_no TEXT,
-                child_part_no TEXT,
-                bom_qty INTEGER DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                fixture_bom_id TEXT PRIMARY KEY,
+                fixture_bom_parent_no TEXT,
+                fixture_bom_child_no TEXT,
+                fixture_bom_qty INTEGER,
+                fixture_bom_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         if verbose:
