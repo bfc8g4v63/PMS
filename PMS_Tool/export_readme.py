@@ -19,13 +19,13 @@ PROJECT_NAME = "PMS"
 FEATURES = [
     "SOP資訊 (已完成_產品資料列綁定SOP、計數、快捷開啟、停用/啟用功能)",
     "SOP生成 (已完成_SOP生成、SOP套用(綁)、資料分類)",
-    "治具管理 (已完成_建立治具、刪除治具、修改資料、入庫、執行調撥、生成儲位、匯出Excel；未完成_安庫告警，待驗證_消耗功能)",
+    "治具管理 (已完成90%_建立治具、刪除治具、修改資料、入庫、執行調撥、生成儲位、匯出Excel(本幣單價、外幣單價、料件總價、倉別總價、預估料件請購金額、預估請購總金額);待驗證_消耗功能;未完成_安庫告警)",
     "治具紀錄 (已完成_出入庫紀錄_治具料號、治具品名、治具規格、動作、異動數量、來源倉、目的倉、治具操作人、時間)",
     "治具BOM (設計中_父子料號關聯)",
     "治具申請 (待規劃_電子簽核、申請單、審核)",
     "治具損耗 (待規劃_POWERBI_報表)",
     "異常平台 (待規劃_Trobleshoot Platform)",
-    "帳號管理 (已完成90%_帳號、角色、專長、新增、刪除、啟用、上傳SOP、可見記錄、刪除記錄、可見SOP、帳號管理；治具管理權限模組化)",
+    "帳號管理 (已完成90%_帳號、角色、專長、新增、刪除、啟用、上傳SOP、可見記錄、刪除記錄、可見SOP、帳號管理;治具管理模組化)",
     "SOP紀錄 (已完成_SOP建立人、動作、檔案名稱、時間)",
     "改版歷程 (已完成_版本、日期、內容記錄)"
 ]
@@ -33,7 +33,13 @@ FEATURES = [
 def export_readme():
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT version, date, content FROM change_log ORDER BY date DESC")
+        cur.execute("""
+            SELECT version, date, content
+            FROM change_log
+            ORDER BY
+                CAST(SUBSTR(version, 2, INSTR(version, '.') - 2) AS INTEGER) DESC,
+                CAST(SUBSTR(version, INSTR(version, '.') + 1) AS FLOAT) DESC
+        """)
         rows = cur.fetchall()
 
     lines = []
