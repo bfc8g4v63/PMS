@@ -129,15 +129,17 @@
             * [x] 後端整合：fixture_logger，自動寫入入庫 / 調撥 / 消耗 / 建立治具紀錄
             * [ ] Backlog（匯出 Excel）
           * [ ] 治具 BOM
-            * [x] 後端支援：fixture_boms 資料表與函式（get_bom_by_part, add_bom_item, delete_bom_item）
+            * [x] 後端支援：fixture_boms 資料表與函式（get_bom_by_part, add_bom_item,delete_bom_item）
             * [x] UI 表單：新增 / 刪除 / TreeView 顯示
             * [ ] Backlog（UI 與後端整合、BOM 匯出）
+          * [ ] Backlog(治具申請)
+          * [ ] Backlog(治具損耗)
           * [x] 帳號管理：新增 / 刪除 / 變更 / 密碼修改（Eng+）、啟用 / 停用
           * [x] 改版歷程：版本 / 日期 / 內容
             * [x] 自動產生版本
             * [x] 雙擊編輯快捷
             * [x] 自定義各內容
-          * [ ] Backlog(治具申請、治具損耗)
+
 ---
 
 ## 應用層
