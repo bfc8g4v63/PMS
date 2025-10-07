@@ -18,6 +18,8 @@
 
 ## 更新紀錄
 
+### v2.4.8 — PMS_修正_README.md 工具讀取資料庫進版原則排序問題
+
 ### v2.4.7 — PMS_系統工具_wal_shm_check
 
 ### v2.4.6 — PMS_系統工具_wal_checkpoint
