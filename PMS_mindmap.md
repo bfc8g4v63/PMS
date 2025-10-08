@@ -2,7 +2,7 @@
 
 ---
 
-## 更新重點（截至 2025-10-02）
+## 更新重點（截至 2025-10-08）
 
 * **SOP 模組**
   * [x] SOP 上傳/生成流程完成：拼圖選取、排序、合併、生成 PDF
@@ -108,7 +108,7 @@
       * [x] 登入（支援 Enter 快捷）
         * [x] 主介面
           * [x] SOP資訊
-            * [x] 欄位：料號 / 品名 / DIP / 組裝 / 測試 / 包裝 / OQC
+            * [x] 欄位：料號 / 品名 / DIP / 組裝 / 測試 / 包裝 / OQC / SOP建立人 / 時間
             * [x] 修正：SOP 更新時間戳、表格置中與欄寬調整
           * [x] SOP生成
             * [x] SOP生成：上傳拼圖、選用拼圖、調整序列、執行生成
@@ -126,7 +126,7 @@
             * [x] 查詢條件：料號 / 使用者
             * [x] TreeView 顯示：單號 / 治具料號 / 治具規格 / 動作 / 異動數量 / 來源倉 / 目的倉 / 治具操作人 / 時間
             * [x] 操作功能：查詢 / 刪除紀錄
-            * [x] 後端整合：fixture_logger，自動寫入入庫 / 調撥 / 消耗 / 建立治具紀錄
+            * [x] 後端整合：fixture_logger，自動寫入 入庫 / 調撥 / 消耗 / 建立治具紀錄
             * [ ] Backlog（匯出 Excel）
           * [ ] 治具 BOM
             * [x] 後端支援：fixture_boms 資料表與函式（get_bom_by_part, add_bom_item,delete_bom_item）
@@ -161,25 +161,48 @@
 
 ## 資料庫層（inspect .177, 2025-10-02）
 
-* **activity_logs**
-  * activity_log_id (INTEGER), activity_log_username (TEXT), activity_log_action (TEXT), activity_log_filename (TEXT), activity_log_timestamp (TEXT), activity_log_module (TEXT)
-* **change_log**
-  * version (TEXT), date (TEXT), content (TEXT)
-* **consumption_logs**
-  * consumption_log_id (TEXT), consumption_log_part_no (TEXT), consumption_log_warehouse (TEXT), consumption_log_qty (INTEGER), consumption_log_user (TEXT), consumption_log_timestamp (TEXT)
-* **fixture_boms**
-  * fixture_bom_id (TEXT), fixture_bom_parent_no (TEXT), fixture_bom_child_no (TEXT), fixture_bom_qty (INTEGER), fixture_bom_timestamp (TEXT)
-* **fixture_logs**
-  * fixture_log_id (TEXT), fixture_log_part_no (TEXT), fixture_log_action (TEXT), fixture_log_qty (INTEGER), fixture_log_from_wh (TEXT), fixture_log_to_wh (TEXT), fixture_log_user (TEXT), fixture_log_timestamp (TEXT)
-* **fixtures**
-  * part_no (TEXT), part_name (TEXT), part_spec (TEXT), part_group (TEXT), unit_price_ntd (REAL), unit_price_usd (REAL), safety_stock (INTEGER), storage_location (TEXT), created_at (TEXT)
-* **sop_information**
-  * product_code (TEXT), product_name (TEXT), dip_sop (TEXT), assembly_sop (TEXT), test_sop (TEXT), packaging_sop (TEXT), oqc_checklist (TEXT), created_by (TEXT), created_at (TEXT), dip_sop_bypass (INTEGER), assembly_sop_bypass (INTEGER), test_sop_bypass (INTEGER), packaging_sop_bypass (INTEGER), oqc_checklist_bypass (INTEGER)
-* **sqlite_sequence**
-  * name (), seq ()
-* **transfer_logs**
-  * transfer_log_id (TEXT), transfer_log_part_no (TEXT), transfer_log_from_wh (TEXT), transfer_log_to_wh (TEXT), transfer_log_qty (INTEGER), transfer_log_user (TEXT), transfer_log_timestamp (TEXT)
-* **users**
-  * username (TEXT), password (TEXT), role (TEXT), specialty (TEXT), can_view_logs (INTEGER), can_delete_logs (INTEGER), can_upload_sop (INTEGER), can_view_sop_info (INTEGER), can_manage_users (INTEGER), can_add (INTEGER), can_delete (INTEGER), active (INTEGER)
-* **warehouse_stock**
-  * part_no (TEXT), warehouse (TEXT), usable_qty (INTEGER), safety_stock (INTEGER)
+* [x] 主資料庫架構
+
+  * [x] SQLite
+
+    * [x] WAL 模式
+    * [x] 定時備份
+    * [x] 地端與雲端切換
+    * [x] 資料庫標準化；遷移；重構地端表
+    * [x] 數量欄位命名一致（usable\_qty）
+    * [x] checkpoint 模組化；降低 DB lock 機率
+    * [x] 雲/地端版本同步
+    * [x] 正式 DB 路徑
+* [x] 模組初始化工具
+
+  * [x] schema\_helper（含 ensure\_changelog\_schema）
+  * [x] fixture\_helper（fixtures / warehouse\_stock / transfer\_logs / consumption\_logs / fixture\_boms）
+* [x] SQLite 強化策略
+
+  * [x] journal\_mode 保持同步（WAL）
+  * [x] timeout 設定與 lock 預防
+  * [x] Zombie lock 檢查機制
+  * [x] 多層備份
+* [x] 表結構現況
+  * **activity_logs**
+    * activity_log_id (INTEGER), activity_log_username (TEXT), activity_log_action (TEXT), activity_log_filename (TEXT), activity_log_timestamp (TEXT), activity_log_module (TEXT)
+  * **change_log**
+    * version (TEXT), date (TEXT), content (TEXT)
+  * **consumption_logs**
+    * consumption_log_id (TEXT), consumption_log_part_no (TEXT), consumption_log_warehouse (TEXT), consumption_log_qty (INTEGER), consumption_log_user (TEXT), consumption_log_timestamp (TEXT)
+  * **fixture_boms**
+    * fixture_bom_id (TEXT), fixture_bom_parent_no (TEXT), fixture_bom_child_no (TEXT), fixture_bom_qty (INTEGER), fixture_bom_timestamp (TEXT)
+  * **fixture_logs**
+    * fixture_log_id (TEXT), fixture_log_part_no (TEXT), fixture_log_action (TEXT), fixture_log_qty (INTEGER), fixture_log_from_wh (TEXT), fixture_log_to_wh (TEXT), fixture_log_user (TEXT), fixture_log_timestamp (TEXT)
+  * **fixtures**
+    * part_no (TEXT), part_name (TEXT), part_spec (TEXT), part_group (TEXT), unit_price_ntd (REAL), unit_price_usd (REAL), safety_stock (INTEGER), storage_location (TEXT), created_at (TEXT)
+  * **sop_information**
+    * product_code (TEXT), product_name (TEXT), dip_sop (TEXT), assembly_sop (TEXT), test_sop (TEXT), packaging_sop (TEXT), oqc_checklist (TEXT), created_by (TEXT), created_at (TEXT), dip_sop_bypass (INTEGER), assembly_sop_bypass (INTEGER), test_sop_bypass (INTEGER), packaging_sop_bypass (INTEGER), oqc_checklist_bypass (INTEGER)
+  * **sqlite_sequence**
+    * name (), seq ()
+  * **transfer_logs**
+    * transfer_log_id (TEXT), transfer_log_part_no (TEXT), transfer_log_from_wh (TEXT), transfer_log_to_wh (TEXT), transfer_log_qty (INTEGER), transfer_log_user (TEXT), transfer_log_timestamp (TEXT)
+  * **users**
+    * username (TEXT), password (TEXT), role (TEXT), specialty (TEXT), can_view_logs (INTEGER), can_delete_logs (INTEGER), can_upload_sop (INTEGER), can_view_sop_info (INTEGER), can_manage_users (INTEGER), can_add (INTEGER), can_delete (INTEGER), active (INTEGER)
+  * **warehouse_stock**
+    * part_no (TEXT), warehouse (TEXT), usable_qty (INTEGER), safety_stock (INTEGER)
