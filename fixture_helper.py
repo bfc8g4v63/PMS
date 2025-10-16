@@ -5,6 +5,18 @@ import uuid
 from db_helper import get_conn, tx
 from fixture_logger import log_fixture_activity
 
+CATEGORY_PREFIX = {
+    "電腦設備類": "930",
+    "載具類": "931",
+    "治具類": "932",
+    "板子類": "933",
+    "主機類": "934",
+    "電供類": "935",
+    "線材類": "936",
+    "卡片類": "937",
+    "其它類": "938",
+    "消耗類": "939"
+}
 CORE_WAREHOUSES = [
     "虹堡",
     "上齊",
@@ -19,6 +31,34 @@ CORE_WAREHOUSES = [
     "工程",
     "不良品"
 ]
+
+def validate_part_no_by_category(category: str, part_no: str):
+    part_no = (part_no or "").strip()
+    prefix = CATEGORY_PREFIX.get(category)
+    if not prefix:
+        raise ValueError(f"未知的類別：{category}")
+    if not (len(part_no) in (8, 12)):
+        raise ValueError("料號長度僅允許 8 或 12 碼")
+    if not part_no.startswith(prefix):
+        raise ValueError(f"料號須以 {prefix} 開頭（對應 {category}）")
+
+def generate_part_no_by_category(category: str) -> str:
+    prefix = CATEGORY_PREFIX.get(category)
+    if not prefix:
+        raise ValueError(f"未知的類別：{category}")
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT part_no FROM fixtures WHERE part_no LIKE ?", (f"{prefix}%",))
+        rows = cur.fetchall()
+
+    existing = sorted(int(r[0]) for r in rows if r[0].isdigit())
+    next_suffix = 1
+    while True:
+        candidate = int(f"{prefix}{next_suffix:05d}")
+        if candidate not in existing:
+            return f"{candidate}"
+        next_suffix += 1
 
 def ensure_schemas():
     with get_conn() as conn:
@@ -58,16 +98,6 @@ def ensure_schemas():
         )
         """)
         cur.execute("""
-        CREATE TABLE IF NOT EXISTS consumption_logs (
-            consumption_log_id TEXT PRIMARY KEY,
-            consumption_log_part_no (TEXT)
-            consumption_log_warehouse (TEXT)
-            consumption_log_qty (INTEGER)
-            consumption_log_user (TEXT)
-            consumption_log_timestamp (TEXT)
-        )
-        """)
-        cur.execute("""
         CREATE TABLE IF NOT EXISTS fixture_boms (
             fixture_bom_id TEXT PRIMARY KEY,
             fixture_bom_parent_no TEXT,
@@ -92,14 +122,22 @@ def ensure_stock_consistency():
                 """, (part_no, wh, ss))
         conn.commit()
 
+def _is_admin(user: str) -> bool:
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT role FROM users WHERE username=?", (user,))
+        row = cur.fetchone()
+        return row and row[0] == "admin"
+
 def insert_fixture(part_no, part_name, part_spec, part_group,
                    unit_price_ntd, safety_stock, storage_location,
                    unit_price_usd=0.0, user=""):
+    validate_part_no_by_category(part_group, part_no)
+
     if not storage_location or safety_stock is None:
         raise ValueError("建立治具必須包含儲位與安庫")
 
     unit_price_usd = int(unit_price_usd * 1000) / 1000.0
-
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
@@ -126,12 +164,14 @@ def insert_fixture(part_no, part_name, part_spec, part_group,
     log_fixture_activity(part_no, "insert_fixture", user=user)
 
 def delete_fixture(part_no, user=""):
+    if not _is_admin(user):
+        raise PermissionError("僅限管理員可刪除治具")
+
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("DELETE FROM warehouse_stock WHERE part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixture_boms WHERE fixture_bom_parent_no=? OR fixture_bom_child_no=?", (part_no, part_no))
         cur.execute("DELETE FROM transfer_logs WHERE transfer_log_part_no = ?", (part_no,))
-        cur.execute("DELETE FROM consumption_logs WHERE consumption_log_part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixtures WHERE part_no = ?", (part_no,))
         conn.commit()
     log_fixture_activity(part_no, "delete_fixture", user=user)
@@ -201,26 +241,6 @@ def transfer_stock(part_no, qty, from_wh, to_wh, user=""):
         """, (log_id, part_no, qty, from_wh, to_wh, user))
     log_fixture_activity(part_no, "transfer_stock", qty, from_wh=from_wh, to_wh=to_wh, user=user)
 
-def consume_stock(part_no, qty, warehouse, user="", line="", purpose=""):
-    if qty <= 0:
-        raise ValueError("消耗量必須大於0")
-    with tx() as conn:
-        cur = conn.cursor()
-        cur.execute("SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
-                    (part_no, warehouse))
-        row = cur.fetchone()
-        if not row or row[0] < qty:
-            raise ValueError("倉庫數量不足，無法消耗")
-        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty - ? WHERE part_no=? AND warehouse=?",
-                    (qty, part_no, warehouse))
-        log_id = uuid.uuid4().hex
-        cur.execute("""
-        INSERT INTO consumption_logs(consumption_log_id, consumption_log_part_no, consumption_log_qty,
-                                     consumption_log_warehouse, consumption_log_user)
-        VALUES (?,?,?,?,?)
-        """, (log_id, part_no, qty, warehouse, user))
-    log_fixture_activity(part_no, "consume_stock", qty, from_wh=warehouse, user=user)
-
 def get_stock(part_no, warehouse):
     with get_conn() as conn:
         cur = conn.cursor()
@@ -252,7 +272,7 @@ def get_fixture_by_part_no(part_no):
             }
             for r in rows
         ]
-
+    
 def get_overview_by_warehouse(warehouse):
     with get_conn() as conn:
         cur = conn.cursor()

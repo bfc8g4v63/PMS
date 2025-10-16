@@ -9,8 +9,7 @@ FIXTURE_ACTION_MAP = {
     "delete_fixture": ("D", "刪除治具"),
     "update_fixture": ("U", "修改資料"),
     "add_stock": ("I", "入庫"),
-    "transfer_stock": ("T", "調撥"),
-    "consume_stock": ("X", "消耗")
+    "transfer_stock": ("T", "調撥")
 }
 
 def ensure_fixture_log_schema():

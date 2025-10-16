@@ -5,12 +5,12 @@ import tkinter as tk
 import openpyxl
 from tkinter import ttk, messagebox, filedialog
 from openpyxl.styles import Alignment
+from fixture_helper import generate_part_no_by_category
 from fixture_helper import (
     insert_fixture,
     delete_fixture,
     add_stock,
     transfer_stock,
-    consume_stock,
     update_fixture,
     get_overview_by_warehouse,
     generate_location,
@@ -22,7 +22,7 @@ from fixture_helper import (
 EXCHANGE_RATE = 30.375
 CATEGORIES = ["電腦設備類","載具類","治具類","板子類","主機類","電供類","線材類","卡片類","其它類","消耗類"]
 
-WAREHOUSES = CORE_WAREHOUSES + ["消耗"]
+WAREHOUSES = CORE_WAREHOUSES
 
 def build_fixture_tab(parent, current_user: str = None, on_change=None):
     frames, trees, total_labels, total_price_labels = {}, {}, {}, {}
@@ -45,11 +45,24 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
     combo_cat.grid(row=3, column=1, sticky="w", padx=3, pady=2)
     entries["治具類群"] = combo_cat
 
+
+
     def after_action():
         refresh_all() 
         if on_change:
             on_change()
-
+    def on_generate_part_no():
+        cat = combo_cat.get().strip()
+        if not cat:
+            messagebox.showerror("錯誤", "請先選擇治具類群")
+            return
+        try:
+            part_no = generate_part_no_by_category(cat)
+            entries["治具料號"].delete(0, tk.END)
+            entries["治具料號"].insert(0, part_no)
+            messagebox.showinfo("完成", f"自動生成料號：{part_no}")
+        except Exception as e:
+            messagebox.showerror("錯誤", str(e))
     def on_add_fixture():
         part_no = entries["治具料號"].get().strip()
         part_name = entries["治具品名"].get().strip()
@@ -111,7 +124,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
         if not (part_no.isdigit() and len(part_no) in (8, 12)):
             messagebox.showerror("錯誤","治具料號必須為 8 或 12 碼數字"); return
         current_tab = notebook.tab(notebook.select(), "text")
-        wh = current_tab if current_tab != "消耗" else "虹堡"
+        wh = current_tab
         try:
             add_stock(part_no, usable_qty, wh, user=current_user or "")
             messagebox.showinfo("完成", f"{part_no} 已入庫 {usable_qty} 至 {wh}")
@@ -134,24 +147,6 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
         try:
             transfer_stock(part_no, usable_qty, from_wh, to_wh, user=current_user or "")
             messagebox.showinfo("完成", f"{part_no} 已調撥 {usable_qty} 從 {from_wh} 到 {to_wh}")
-            after_action()
-        except Exception as e:
-            messagebox.showerror("錯誤", str(e))
-
-    def on_consume():
-        part_no = entries["治具料號"].get().strip()
-        qty_str = entries["入庫數量"].get().strip()
-        current_tab = notebook.tab(notebook.select(), "text")
-        wh = current_tab if current_tab != "消耗" else "虹堡"
-        try:
-            usable_qty = int(qty_str)
-        except:
-            messagebox.showerror("錯誤","消耗量必須是整數"); return
-        if not (part_no.isdigit() and len(part_no) in (8, 12)):
-            messagebox.showerror("錯誤","治具料號必須為 8 或 12 碼數字"); return
-        try:
-            consume_stock(part_no, usable_qty, wh, user=current_user or "", line="", purpose="生產消耗")
-            messagebox.showinfo("完成", f"{part_no} 已自 {wh} 消耗 {usable_qty}")
             after_action()
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
@@ -205,7 +200,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
                 "預估請購量","預估請購金額"
             ]
             ws.append(headers)
-            rows = get_overview_by_warehouse(wh if wh != "消耗" else "虹堡")
+            rows = get_overview_by_warehouse(wh)
 
             total_estimate_cost = 0
             for (part_no, part_name, part_spec, part_group, unit_price_usd, unit_price_ntd, safety_stock, storage_location, usable_qty) in rows:
@@ -264,6 +259,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
     ttk.Button(form, text="建立治具", command=on_add_fixture).grid(row=0, column=2, padx=5)
     ttk.Button(form, text="刪除治具", command=on_delete_fixture).grid(row=1, column=2, padx=5)
     ttk.Button(form, text="⚙修改資料", command=on_update_fixture).grid(row=6, column=2, padx=5)
+    ttk.Button(form, text="生成料號", command=on_generate_part_no).grid(row=0, column=3, padx=5)
     ttk.Button(form, text="生成儲位", command=on_generate_location).grid(row=6, column=3, padx=5)
     ttk.Button(form, text="⏫入庫", command=on_add_stock).grid(row=7, column=2, padx=5)
 
@@ -280,7 +276,6 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
     combo_to.grid(row=0, column=3, padx=3)
 
     ttk.Button(transfer_frame, text="執行調撥", command=on_transfer).grid(row=1, column=0, pady=3, padx=5)
-    ttk.Button(transfer_frame, text="⚙消耗", command=on_consume).grid(row=1, column=1, pady=3, padx=5)
     ttk.Button(transfer_frame, text="⇩匯出Excel", command=on_export_excel).grid(row=1, column=2, pady=3, padx=5)
 
     for wh in WAREHOUSES:
@@ -311,7 +306,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
             entries["治具單價(USD)"].delete(0, tk.END); entries["治具單價(USD)"].insert(0, vals[4])
             entries["安全庫存"].delete(0, tk.END); entries["安全庫存"].insert(0, vals[7])
             entries["儲位"].delete(0, tk.END); entries["儲位"].insert(0, vals[8])
-            combo_from.set(wh if wh != "消耗" else "虹堡")
+            combo_from.set(wh)
 
         tree.bind("<Double-1>", on_double)
 
@@ -321,8 +316,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
 
 def refresh_fixture_tree(tree, warehouse, total_label=None, total_price_label=None):
     tree.delete(*tree.get_children())
-    wh_for_query = warehouse if warehouse != "消耗" else "虹堡"
-    rows = get_overview_by_warehouse(wh_for_query)
+    rows = get_overview_by_warehouse(warehouse)
 
     total_qty = 0
     total_price = 0.0

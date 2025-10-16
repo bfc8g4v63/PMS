@@ -2,7 +2,7 @@
 
 ---
 
-## 更新重點（截至 2025-10-08）
+## 更新重點（截至 2025-10-16）
 
 * **SOP 模組**
   * [x] SOP 上傳/生成流程完成：拼圖選取、排序、合併、生成 PDF
@@ -12,21 +12,24 @@
   * [x] SOP 上傳按鈕加上 @safe_button_action 防止重複點擊
 
 * **治具管理模組**
-  * [x] 建立治具時自動生成四倉別資料
+  * [x] 建立治具時自動生成十二倉別資料（虹堡、上齊、睿均、捷暉、立榮、華勤、上貿、麥博、信利、GC、工程、不良品）
   * [x] 新增料號驗證（長度 8 或 12 碼、必須為數字）
+  * [x] 自動生成料號（依類別前綴 930–939，確保不重複）
   * [x] 刪除後再新增相同料號，不會遺留舊數據
-  * [x] 入庫 / 調撥 / 消耗功能完成，數量不得為負
+  * [x] 入庫 / 調撥 完成，數量不得為負
   * [x] 入庫倉別依 Notebook 分頁自動判斷，不再用下拉選單
   * [x] 儲位規則：1-1-1 ~ 9-4-50，不補零；僅虹堡倉有安庫與儲位
-  * [x] 四倉分頁 TreeView 獨立顯示，並於下方顯示總數統計
+  * [x] 各倉分頁 TreeView 獨立顯示，並於下方顯示總數統計
   * [x] 倉別加總顯示不重複料號
-  * [x] 匯出 Excel 時新增運算輸出 預估請購量/金額與總金額統計
-  * [x] 四大操作按鈕（新增/入庫/調撥/消耗）尚待全面套用 @safe_button_action
-  * [x] 治具 BOM 分頁 UI 規劃中（fixture_boms 已完成 介面層，資料表已建立）
+  * [x] 匯出 Excel 時新增運算輸出 預估請購量 / 預估請購金額 / 預估請購總金額
+  * [x] 三大操作按鈕（新增 / 入庫 / 調撥）全面套用 @safe_button_action
+  * [x] 消耗功能已移除（不再包含消耗倉）
+  * [x] 治具 BOM 分頁 UI 規劃中（fixture_boms 已完成介面層與資料表）
 
 * **治具紀錄模組**
   * [x] 分頁完成：查詢條件（料號 / 使用者）、TreeView 顯示、刪除紀錄
-  * [x] 與 fixture_logger 整合（建立/入庫/調撥/消耗自動寫入）
+  * [x] 與 fixture_logger 整合（建立 / 入庫 / 調撥 自動寫入）
+  * [x] fixture_logs 移除 remark 欄位，統一以 action、user、timestamp 記錄
   * [ ] Backlog：日期查詢、匯出 Excel
 
 * **帳號與權限模組**
@@ -121,15 +124,16 @@
             * [x] 基本資料：料號、品名、規格、類群、單價（NTD/USD）、總價、倉別總價
             * [x] 數量：安全庫存、可用數量、倉別總數、分頁顯示合計
             * [x] 修正：料號/品名驗證、儲位規則（1-1-1 至 9-4-50）、刪除後重建不殘留、虹堡倉限制
-            * [x] 操作功能：建立治具 / 刪除治具 / 修改資料 / 入庫（依分頁倉別） / 調撥（來源倉雙擊快捷預設、目標倉） / 消耗 / 匯出 EXCEL（倉內資料、料件外幣單價、料件本幣單價、料件本幣總價，倉別總價、倉別總數、預估請購量/金額/總額）
+            * [x] 操作功能：建立治具 / 刪除治具 / 修改資料 / 入庫（依分頁倉別） / 調撥（來源倉雙擊快捷預設、目標倉） / 匯出 EXCEL（倉內資料、料件外幣單價、料件本幣單價、料件本幣總價，倉別總價、倉別總數、預估請購量/金額/總額）
+            * [x] 操作按鈕全面套用 @safe_button_action
           * [x] 治具紀錄
             * [x] 查詢條件：料號 / 使用者
             * [x] TreeView 顯示：單號 / 治具料號 / 治具規格 / 動作 / 異動數量 / 來源倉 / 目的倉 / 治具操作人 / 時間
             * [x] 操作功能：查詢 / 刪除紀錄
-            * [x] 後端整合：fixture_logger，自動寫入 入庫 / 調撥 / 消耗 / 建立治具紀錄
+            * [x] 後端整合：fixture_logger，自動寫入 入庫 / 調撥 / 建立治具紀錄
             * [ ] Backlog（匯出 Excel）
           * [ ] 治具 BOM
-            * [x] 後端支援：fixture_boms 資料表與函式（get_bom_by_part, add_bom_item,delete_bom_item）
+            * [x] 後端支援：fixture_boms 資料表與函式（get_bom_by_part, add_bom_item, delete_bom_item）
             * [x] UI 表單：新增 / 刪除 / TreeView 顯示
             * [ ] Backlog（UI 與後端整合、BOM 匯出）
           * [ ] Backlog(治具申請)
@@ -159,37 +163,34 @@
 
 ---
 
-## 資料庫層（inspect .177, 2025-10-02）
+## 資料庫層（inspect .177, 2025-10-16）
 
 * [x] 主資料庫架構
-
   * [x] SQLite
-
     * [x] WAL 模式
     * [x] 定時備份
     * [x] 地端與雲端切換
     * [x] 資料庫標準化；遷移；重構地端表
-    * [x] 數量欄位命名一致（usable\_qty）
+    * [x] 數量欄位命名一致（usable_qty）
     * [x] checkpoint 模組化；降低 DB lock 機率
     * [x] 雲/地端版本同步
     * [x] 正式 DB 路徑
+
 * [x] 模組初始化工具
+  * [x] schema_helper（含 ensure_changelog_schema）
+  * [x] fixture_helper（fixtures / warehouse_stock / transfer_logs / fixture_boms）
 
-  * [x] schema\_helper（含 ensure\_changelog\_schema）
-  * [x] fixture\_helper（fixtures / warehouse\_stock / transfer\_logs / consumption\_logs / fixture\_boms）
 * [x] SQLite 強化策略
-
-  * [x] journal\_mode 保持同步（WAL）
+  * [x] journal_mode 保持同步（WAL）
   * [x] timeout 設定與 lock 預防
   * [x] Zombie lock 檢查機制
   * [x] 多層備份
+
 * [x] 表結構現況
   * **activity_logs**
     * activity_log_id (INTEGER), activity_log_username (TEXT), activity_log_action (TEXT), activity_log_filename (TEXT), activity_log_timestamp (TEXT), activity_log_module (TEXT)
   * **change_log**
     * version (TEXT), date (TEXT), content (TEXT)
-  * **consumption_logs**
-    * consumption_log_id (TEXT), consumption_log_part_no (TEXT), consumption_log_warehouse (TEXT), consumption_log_qty (INTEGER), consumption_log_user (TEXT), consumption_log_timestamp (TEXT)
   * **fixture_boms**
     * fixture_bom_id (TEXT), fixture_bom_parent_no (TEXT), fixture_bom_child_no (TEXT), fixture_bom_qty (INTEGER), fixture_bom_timestamp (TEXT)
   * **fixture_logs**

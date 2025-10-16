@@ -23,7 +23,7 @@ def build_fixture_logs_tab(frame, refresh_only=False):
     tk.Label(query_frame, text="動作:").grid(row=0, column=4, padx=5, pady=2, sticky="e")
     action_var = tk.StringVar()
     action_combo = ttk.Combobox(query_frame, textvariable=action_var, width=12, state="readonly")
-    action_combo["values"] = ("", "建立治具", "刪除治具", "修改資料", "入庫", "調撥", "消耗")
+    action_combo["values"] = ("", "建立治具", "刪除治具", "修改資料", "入庫", "調撥")
     action_combo.grid(row=0, column=5, padx=5, pady=2)
 
     columns = (
