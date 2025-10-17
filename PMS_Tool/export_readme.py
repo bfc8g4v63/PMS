@@ -1,18 +1,15 @@
 #$ export_readme.py
-#% 匯出 changelog 到 README.md
+#% 匯出 changelog 到 README.md（固定使用正式伺服器 .177 資料庫）
 
 import os
 import sys
+import sqlite3
 from pathlib import Path
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 sys.path.append(str(ROOT_DIR))
 
-from config import apply_db_path
-from db_helper import get_conn
-
-apply_db_path()
-
+DB_PATH = r"\\192.120.100.177\工程部\生產管理\生產資訊平台\PMS.db"
 OUTPUT_FILE = ROOT_DIR / "README.md"
 
 PROJECT_NAME = "PMS"
@@ -31,7 +28,7 @@ FEATURES = [
 ]
 
 def export_readme():
-    with get_conn() as conn:
+    with sqlite3.connect(DB_PATH) as conn:
         cur = conn.cursor()
         cur.execute("""
             SELECT version, date, content
@@ -61,7 +58,7 @@ def export_readme():
             lines.append("")
 
     OUTPUT_FILE.write_text("\n".join(lines), encoding="utf-8")
-    print(f"已更新 {OUTPUT_FILE}")
+    print(f"已更新 {OUTPUT_FILE}（來源：{DB_PATH}）")
 
 if __name__ == "__main__":
     export_readme()
