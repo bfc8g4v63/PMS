@@ -258,12 +258,12 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
 
     ttk.Button(form, text="建立治具", command=on_add_fixture).grid(row=0, column=2, padx=5)
     ttk.Button(form, text="刪除治具", command=on_delete_fixture).grid(row=1, column=2, padx=5)
-    ttk.Button(form, text="⚙修改資料", command=on_update_fixture).grid(row=6, column=2, padx=5)
+    ttk.Button(form, text="修改資料", command=on_update_fixture).grid(row=6, column=2, padx=5)
     ttk.Button(form, text="生成料號", command=on_generate_part_no).grid(row=0, column=3, padx=5)
     ttk.Button(form, text="生成儲位", command=on_generate_location).grid(row=6, column=3, padx=5)
-    ttk.Button(form, text="⏫入庫", command=on_add_stock).grid(row=7, column=2, padx=5)
+    ttk.Button(form, text="入庫", command=on_add_stock).grid(row=7, column=2, padx=5)
 
-    transfer_frame = ttk.LabelFrame(form, text="🔁調撥 / 其它操作")
+    transfer_frame = ttk.LabelFrame(form, text="調撥 / 其它操作")
     transfer_frame.grid(row=8, column=0, columnspan=3, sticky="ew", pady=5)
 
     ttk.Label(transfer_frame, text="來源:").grid(row=0, column=0, padx=3)
@@ -276,7 +276,7 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
     combo_to.grid(row=0, column=3, padx=3)
 
     ttk.Button(transfer_frame, text="執行調撥", command=on_transfer).grid(row=1, column=0, pady=3, padx=5)
-    ttk.Button(transfer_frame, text="⇩匯出Excel", command=on_export_excel).grid(row=1, column=2, pady=3, padx=5)
+    ttk.Button(transfer_frame, text="匯出Excel", command=on_export_excel).grid(row=1, column=2, pady=3, padx=5)
 
     for wh in WAREHOUSES:
         frame = ttk.Frame(notebook); frames[wh] = frame; notebook.add(frame, text=wh)
