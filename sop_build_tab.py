@@ -379,9 +379,15 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
     apply_canvas.bind_all("<MouseWheel>", _on_mousewheel)
     apply_canvas.bind_all("<Button-4>", _on_mousewheel_linux)
     apply_canvas.bind_all("<Button-5>", _on_mousewheel_linux)
-
+    def _normalize_text(s):
+        s = s.strip()
+        table = str.maketrans({
+            "０": "0", "１": "1", "２": "2", "３": "3", "４": "4",
+            "５": "5", "６": "6", "７": "7", "８": "8", "９": "9",
+        })
+        return s.translate(table).casefold()
     def search_apply_targets():
-        keyword = entry_keyword2.get().strip().lower()
+        keyword = _normalize_text(entry_keyword2.get())
         if not keyword:
             messagebox.showinfo("提示", "請輸入料號/品名關鍵字")
             return
@@ -391,8 +397,8 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
         apply_items.clear()
         apply_checks.clear()
 
-        terms_and = [t.strip() for t in keyword.split('&')] if '&' in keyword else []
-        terms_or = [t.strip() for t in keyword.split('/')] if '/' in keyword else []
+        terms_and = [_normalize_text(t) for t in keyword.split('&')] if '&' in keyword else []
+        terms_or = [_normalize_text(t) for t in keyword.split('/')] if '/' in keyword else []
 
         with get_conn() as conn:
             cursor = conn.cursor()
@@ -400,7 +406,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
             all_data = cursor.fetchall()
 
         for code, name in all_data:
-            combined = f"{code}_{name}".lower()
+            combined = _normalize_text(f"{code}_{name}")
             if terms_and:
                 matched = all(term in combined for term in terms_and)
             elif terms_or:
@@ -436,7 +442,7 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
     tree.bind("<Double-1>", on_treeview_double_click)
 
     def search_apply_files():
-        keyword = entry_apply_search.get().strip().lower()
+        keyword = _normalize_text(entry_apply_search.get())
         for row in tree.get_children():
             tree.delete(row)
         sub_items.clear()
@@ -447,11 +453,19 @@ def build_sop_apply_section(parent_frame, current_user, db_name, on_refresh=None
         if not search_path:
             messagebox.showerror("錯誤", f"無法決定 {selected_key} 對應的路徑")
             return
+
         if os.path.isdir(search_path):
-            files = [os.path.join(search_path, f) for f in os.listdir(search_path)
-                     if keyword in f.lower() and f.lower().endswith(".pdf")]
+            names = os.listdir(search_path)
+            files = []
+            for f in names:
+                if not f.lower().endswith(".pdf"):
+                    continue
+                nf = _normalize_text(f)
+                if keyword in nf:
+                    files.append(os.path.join(search_path, f))
         else:
             files = []
+
         for f in files:
             tree.insert("", "end", values=(os.path.basename(f),))
             sub_items.append(f)
