@@ -5,6 +5,8 @@ import tkinter as tk
 import threading
 import shutil
 import os
+import sys
+import subprocess
 from tkinter import filedialog, messagebox, ttk
 import fitz
 import re
@@ -26,6 +28,20 @@ SOP_SAVE_PATHS = {
     "packaging": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\包裝SOP",
     "oqc": r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查表OQC"
 }
+
+def open_file_with_system(path):
+    if not os.path.isfile(path):
+        messagebox.showerror("錯誤", "檔案不存在，可能已被移除或路徑變更")
+        return
+    try:
+        if sys.platform.startswith("win"):
+            os.startfile(path)
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", path])
+        else:
+            subprocess.Popen(["xdg-open", path])
+    except Exception as exc:
+        messagebox.showerror("錯誤", f"開啟檔案時發生錯誤：{exc}")
 
 def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
     """SOP 生成區：PDF 拼圖合併與儲存
@@ -138,6 +154,33 @@ def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
     scrollbar.pack(side="right", fill="y")
     result_list.config(yscrollcommand=scrollbar.set)
 
+    puzzle_menu = tk.Menu(result_list, tearoff=0)
+    puzzle_menu.add_command(label="開啟", command=lambda: open_selected_puzzle_file())
+
+    def open_selected_puzzle_file():
+        selection = result_list.curselection()
+        if not selection:
+            return
+        index = selection[0]
+        if index < 0 or index >= len(search_results):
+            return
+        path = search_results[index]
+        open_file_with_system(path)
+
+    def on_result_right_click(event):
+        if result_list.size() == 0:
+            return
+        index = result_list.nearest(event.y)
+        result_list.selection_clear(0, tk.END)
+        result_list.selection_set(index)
+        result_list.activate(index)
+        try:
+            puzzle_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            puzzle_menu.grab_release()
+
+    result_list.bind("<Button-3>", on_result_right_click)
+
     def search_files():
         keyword = entry_keyword.get().strip().lower()
         search_results.clear()
@@ -150,32 +193,34 @@ def build_sop_upload_tab(tab_frame, current_user, db_name, on_refresh=None):
             terms = [k.strip() for k in keyword.split('&')]
             for f in os.listdir(path):
                 if all(term in f.lower() for term in terms) and f.lower().endswith(".pdf"):
-                    search_results.append(f)
+                    search_results.append(os.path.join(path, f))
         elif '/' in keyword:
             terms = [k.strip() for k in keyword.split('/')]
             for f in os.listdir(path):
                 if any(term in f.lower() for term in terms) and f.lower().endswith(".pdf"):
-                    search_results.append(f)
+                    search_results.append(os.path.join(path, f))
         else:
             for f in os.listdir(path):
                 if keyword in f.lower() and f.lower().endswith(".pdf"):
-                    search_results.append(f)
+                    search_results.append(os.path.join(path, f))
 
-        for f in search_results:
-            result_list.insert(tk.END, f)
+        for full_path in search_results:
+            result_list.insert(tk.END, os.path.basename(full_path))
 
         if not search_results:
             messagebox.showinfo("查無結果", "查無符合的 PDF 檔案")
 
     def on_double_click(event):
         idx = result_list.curselection()
-        if idx:
-            fname = search_results[idx[0]]
-            if fname in selected_files:
-                selected_files.remove(fname)
-            else:
-                selected_files.append(fname)
-            refresh_sort_list()
+        if not idx:
+            return
+        full_path = search_results[idx[0]]
+        fname = os.path.basename(full_path)
+        if fname in selected_files:
+            selected_files.remove(fname)
+        else:
+            selected_files.append(fname)
+        refresh_sort_list()
 
     result_list.bind("<Double-Button-1>", on_double_click)
 
