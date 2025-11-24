@@ -55,7 +55,7 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
         )
         conn.commit()
 
-def get_fixture_logs(part_no=None, user=None, action=None, limit=200):
+def get_fixture_logs(part_no=None, user=None, action=None, start_ts=None, end_ts=None, limit=200):
     query = """
         SELECT l.fixture_log_id,
                l.fixture_log_part_no,
@@ -82,6 +82,12 @@ def get_fixture_logs(part_no=None, user=None, action=None, limit=200):
     if action:
         query += " AND l.fixture_log_action=?"
         params.append(action)
+    if start_ts:
+        query += " AND l.fixture_log_timestamp >= ?"
+        params.append(start_ts)
+    if end_ts:
+        query += " AND l.fixture_log_timestamp <= ?"
+        params.append(end_ts)
 
     query += " ORDER BY l.fixture_log_timestamp DESC LIMIT ?"
     params.append(limit)

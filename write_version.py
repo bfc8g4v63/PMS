@@ -3,7 +3,7 @@
 import os
 from datetime import datetime
 
-__version__ = "v2.5.4"
+__version__ = "v2.5.6"
 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 content = f"{__version__} - built at {timestamp}"

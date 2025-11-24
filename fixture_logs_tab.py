@@ -4,6 +4,8 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 from fixture_logger import get_fixture_logs, delete_fixture_logs
+from date_picker import open_date_picker
+from datetime import datetime
 
 def build_fixture_logs_tab(frame, refresh_only=False):
     if refresh_only:
@@ -26,6 +28,26 @@ def build_fixture_logs_tab(frame, refresh_only=False):
     action_combo["values"] = ("", "建立治具", "刪除治具", "修改資料", "入庫", "調撥")
     action_combo.grid(row=0, column=5, padx=5, pady=2)
 
+    tk.Label(query_frame, text="起始日期:").grid(row=1, column=0, padx=5, pady=2, sticky="e")
+    start_date_var = tk.StringVar()
+    start_entry = tk.Entry(query_frame, textvariable=start_date_var, width=15)
+    start_entry.grid(row=1, column=1, padx=5, pady=2)
+
+    def pick_start_date():
+        open_date_picker(frame, "選擇起始日期", start_date_var.get().strip(), lambda v: start_date_var.set(v))
+
+    ttk.Button(query_frame, text="選擇", command=pick_start_date).grid(row=1, column=2, padx=5, pady=2)
+
+    tk.Label(query_frame, text="結束日期:").grid(row=1, column=3, padx=5, pady=2, sticky="e")
+    end_date_var = tk.StringVar()
+    end_entry = tk.Entry(query_frame, textvariable=end_date_var, width=15)
+    end_entry.grid(row=1, column=4, padx=5, pady=2)
+
+    def pick_end_date():
+        open_date_picker(frame, "選擇結束日期", end_date_var.get().strip(), lambda v: end_date_var.set(v))
+
+    ttk.Button(query_frame, text="選擇", command=pick_end_date).grid(row=1, column=5, padx=5, pady=2)
+    
     columns = (
         "單號",
         "治具料號",
@@ -65,10 +87,25 @@ def build_fixture_logs_tab(frame, refresh_only=False):
 
     def on_query():
         try:
+            start_text = start_date_var.get().strip()
+            end_text = end_date_var.get().strip()
+
+            start_ts = None
+            end_ts = None
+
+            if start_text:
+                dt = datetime.strptime(start_text, "%Y-%m-%d")
+                start_ts = dt.strftime("%Y%m%dT000000")
+            if end_text:
+                dt = datetime.strptime(end_text, "%Y-%m-%d")
+                end_ts = dt.strftime("%Y%m%dT235959")
+
             logs = get_fixture_logs(
                 part_no=part_no_var.get().strip() or None,
                 user=user_var.get().strip() or None,
                 action=action_var.get().strip() or None,
+                start_ts=start_ts,
+                end_ts=end_ts,
                 limit=200
             )
             for row in tree.get_children():
@@ -97,7 +134,7 @@ def build_fixture_logs_tab(frame, refresh_only=False):
             messagebox.showinfo("完成", "所選紀錄已刪除")
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
-
+            
     def on_delete_all():
         if not messagebox.askyesno("確認", "確定要刪除全部紀錄？"):
             return
@@ -111,7 +148,19 @@ def build_fixture_logs_tab(frame, refresh_only=False):
     btn_frame = ttk.Frame(frame)
     btn_frame.pack(fill="x", padx=5, pady=5)
     ttk.Button(btn_frame, text="查詢", command=on_query).pack(side="left", padx=5)
-    ttk.Button(btn_frame, text="重置", command=lambda: [part_no_var.set(""), user_var.set(""), action_var.set(""), on_query()]).pack(side="left", padx=5)
+    ttk.Button(
+        btn_frame,
+        text="重置",
+        command=lambda: [
+            part_no_var.set(""),
+            user_var.set(""),
+            action_var.set(""),
+            start_date_var.set(""),
+            end_date_var.set(""),
+            on_query()
+        ],
+    ).pack(side="left", padx=5)
+
     ttk.Button(btn_frame, text="刪除所選", command=on_delete_selected).pack(side="left", padx=5)
     ttk.Button(btn_frame, text="刪除全部", command=on_delete_all).pack(side="left", padx=5)
 
