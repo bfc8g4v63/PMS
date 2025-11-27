@@ -9,7 +9,9 @@ import socket
 import shutil
 import atexit
 import time
+import json
 import tkinter.font as tkFont
+from pathlib import Path
 from fixture_helper import ensure_stock_consistency
 from db_helper import get_conn, set_db_path
 
@@ -66,6 +68,47 @@ OQC_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查�
 
 LOG_TABLE = "activity_logs"
 _instance_lock = None
+
+def get_login_config_path():
+    appdata_dir = os.environ.get("APPDATA")
+    if not appdata_dir:
+        home_dir = str(Path.home())
+        base_dir = os.path.join(home_dir, ".pms")
+    else:
+        base_dir = os.path.join(appdata_dir, "PMS")
+    if not os.path.isdir(base_dir):
+        os.makedirs(base_dir, exist_ok=True)
+    return os.path.join(base_dir, "login_config.json")
+
+def load_saved_credentials():
+    config_path = get_login_config_path()
+    if not os.path.exists(config_path):
+        return None
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {
+            "username": data.get("username", ""),
+            "password": data.get("password", ""),
+        }
+    except:
+        return None
+
+def save_credentials(username, password, remember_password):
+    config_path = get_login_config_path()
+    data = {"username": username}
+    if remember_password:
+        data["password"] = password
+    else:
+        data["password"] = ""
+    try:
+        with open(config_path, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
+    except:
+        pass
+
+def is_valid_file(file_path, field_name):
+    allowed_extensions = [".pdf"]
 
 def is_valid_file(file_path, field_name):
     allowed_extensions = [".pdf"]
@@ -212,6 +255,7 @@ def login():
                         "can_manage_users": r[8]
                     })
                     print("目前使用的 DB 檔案路徑：", DB_NAME)
+                    save_credentials(u, p, remember_var.get())
                     login_window.destroy()
                 else:
                     messagebox.showerror("錯誤", "帳號或密碼錯誤或帳號已停用")
@@ -233,6 +277,18 @@ def login():
     tk.Label(login_window, text="密碼：").pack(pady=(10, 5))
     entry_pass = tk.Entry(login_window, show="*")
     entry_pass.pack()
+
+    remember_var = tk.BooleanVar(value=False)
+    remember_check = tk.Checkbutton(login_window, text="記住密碼", variable=remember_var)
+    remember_check.pack(pady=(5, 0))
+
+    saved = load_saved_credentials()
+    if saved:
+        if saved.get("username"):
+            entry_user.insert(0, saved.get("username"))
+        if saved.get("password"):
+            entry_pass.insert(0, saved.get("password"))
+            remember_var.set(True)
 
     login_btn = tk.Button(login_window, text="登入", command=try_login)
     login_btn.pack(pady=15)
