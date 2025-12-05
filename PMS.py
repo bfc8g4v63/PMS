@@ -109,9 +109,6 @@ def save_credentials(username, password, remember_password):
 
 def is_valid_file(file_path, field_name):
     allowed_extensions = [".pdf"]
-
-def is_valid_file(file_path, field_name):
-    allowed_extensions = [".pdf"]
     if field_name == "oqc_checklist":
         allowed_extensions.append(".xlsx")
     ext = os.path.splitext(file_path)[1].lower()
