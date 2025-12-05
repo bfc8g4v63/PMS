@@ -180,7 +180,7 @@ def build_changelog_tab(tab, current_role, db_name):
             version_entry.insert(0, next_version)
             validate_version()
 
-        auto_button = ttk.Button(entry_frame, text="自動產生版本", command=fill_next_version)
+        auto_button = ttk.Button(entry_frame, text="產生版本", command=fill_next_version)
         auto_button.grid(row=0, column=4, padx=10, sticky="w")
 
         add_button = ttk.Button(entry_frame, text="新增紀錄", command=insert_changelog, state=tk.DISABLED)
