@@ -908,18 +908,44 @@ def create_main_interface(root, db_name, login_info):
                     else:
                         messagebox.showerror("錯誤", f"找不到檔案：{full_path}")
 
+    tree.last_hovered_item = ""
+    tree.last_hovered_col_index = 0
+
+    def on_tree_motion(event):
+        tree_widget = event.widget
+        tree_widget.focus_set()
+        item = tree_widget.identify_row(event.y)
+        col = tree_widget.identify_column(event.x)
+        if item:
+            tree_widget.last_hovered_item = item
+        if col:
+            try:
+                index = int(col[1:]) - 1
+            except ValueError:
+                index = 0
+            if index >= 0:
+                tree_widget.last_hovered_col_index = index
+
     def on_copy(event):
-        focus = tree.focus()
-        if not focus:
+        tree_widget = event.widget
+        item_id = getattr(tree_widget, "last_hovered_item", "")
+        col_index = getattr(tree_widget, "last_hovered_col_index", 0)
+        if not item_id:
             return
-        col = tree.identify_column(event.x)
-        col_index = int(col[1:]) - 1
-        value = tree.item(focus)['values'][col_index]
+        values = tree_widget.item(item_id, "values")
+        if not values:
+            return
+        if col_index < 0 or col_index >= len(values):
+            return
+        if col_index not in (0, 1):
+            return
+        value_str = str(values[col_index])
         root.clipboard_clear()
-        root.clipboard_append(str(value))
+        root.clipboard_append(value_str)
         root.update()
 
     tree.bind("<Double-1>", on_double_click)
+    tree.bind("<Motion>", on_tree_motion)
     tree.bind("<Control-c>", on_copy)
 
     def toggle_bypass(product_code, field_name, bypass_field):

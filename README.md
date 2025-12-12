@@ -18,6 +18,50 @@
 
 ## 更新紀錄
 
+### v2.8.1 — PMS__功能_支援滑鼠游標所在料號、品名欄位直接複製內容；無須點擊資料列
+
+### v2.8.0 — PMS_SafeStock_重大變更_整合PMS主系統模組化
+
+### v2.7.9 — PMS_SafeStock_功能_流程強化與排程穩定度提升
+
+### v2.7.8 — PMS_SafeStock_修正_設定儲存與載入邏輯優化
+
+### v2.7.7 — PMS_SafeStock_修正_SMTP相容性改善
+
+### v2.7.6 — PMS_SafeStock_修正_設定檔自動補齊缺欄
+
+### v2.7.5 — PMS_SafeStock_功能_GUI與Silent雙模式完整化
+
+### v2.7.4 — PMS_SafeStock_功能_Excel固定檔名fixture_low_stock
+
+### v2.7.3 — PMS_SafeStock_修正_Excel統一LowStock分頁
+
+### v2.7.2 — PMS_SafeStock_修正_GUI錯誤提示不中斷
+
+### v2.7.1 — PMS_SafeStock_功能_Silent模式支援排程頻率判斷
+
+### v2.7.0 — PMS_SafeStock_功能_Silent模式正式啟用
+
+### v2.6.9 — PMS_SafeStock_修正_GUI提示改善
+
+### v2.6.8 — PMS_SafeStock_修正_last_run_date未更新問題
+
+### v2.6.7 — PMS_SafeStock_修正_SMTP無密碼寄送失敗
+
+### v2.6.6 — PMS_SafeStock_功能_Silent模式雛形建立
+
+### v2.6.5 — PMS_SafeStock_修正_DB與SMTP防呆邏輯
+
+### v2.6.4 — PMS_SafeStock_功能_GUI立即檢查並寄信
+
+### v2.6.3 — PMS_SafeStock_功能_Excel匯出（timestamp模式）
+
+### v2.6.2 — PMS_SafeStock_功能_新增頻率模式每日每週每月與自訂
+
+### v2.6.1 — PMS_SafeStock_功能_新增SMTP與多收件人管理
+
+### v2.6.0 — PMS_SafeStock_功能_導入設定檔與狀態檔
+
 ### v2.5.9 — PMS_修正_移除檢查格式條件Dead code
 
 ### v2.5.8 — PMS_修正_GUI顯示調整
