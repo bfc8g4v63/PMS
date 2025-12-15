@@ -1,4 +1,4 @@
-#$ shutil.copy.py
+#$ shutil_copy.py
 #% 從網路位置複製 SQLite 資料庫到本地端
 
 import shutil

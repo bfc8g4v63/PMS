@@ -9,19 +9,44 @@ from utils import log_activity
 from schema_helper import auto_add_missing_columns, get_required_columns
 from db_helper import get_conn
 
+
 def build_user_management_tab(tab, db_name, current_user):
 
     auto_add_missing_columns(db_name, get_required_columns())
+
     PERMISSION_FLAGS = {
-        "can_add": {"label": "新增", "default": 1},
-        "can_delete": {"label": "刪除", "default": 0},
-        "active": {"label": "啟用", "default": 1},
+        "can_add": {"label": "新增SOP列", "default": 1},
+        "can_delete": {"label": "刪除SOP列", "default": 0},
+        "active": {"label": "帳號啟用", "default": 1},
         "can_view_logs": {"label": "可見SOP紀錄", "default": 1},
         "can_delete_logs": {"label": "刪除SOP紀錄", "default": 0},
         "can_upload_sop": {"label": "上傳SOP", "default": 1},
         "can_view_sop_info": {"label": "可見SOP資訊", "default": 1},
-        "can_manage_users": {"label": "帳號管理", "default": 0}
+        "can_manage_users": {"label": "帳號管理", "default": 0},
+        "can_view_fixture": {"label": "可見治具", "default": 1},
+        "can_edit_fixture": {"label": "可編輯治具", "default": 0},
+        "can_adjust_fixture": {"label": "可調帳治具", "default": 0},
+        "can_view_fixture_logs": {"label": "可見治具紀錄", "default": 1},
+        "can_delete_fixture_logs": {"label": "刪除治具紀錄", "default": 0}
     }
+
+    def _normalize_current_user(u):
+        if u is None:
+            return ""
+        if isinstance(u, str):
+            return u.strip()
+        if isinstance(u, dict):
+            v = u.get("user") or u.get("username") or ""
+            return str(v).strip()
+        return str(u).strip()
+
+    current_username = _normalize_current_user(current_user)
+
+    def _open_conn():
+        try:
+            return get_conn(db_name)
+        except TypeError:
+            return get_conn()
 
     frame = tk.Frame(tab)
     frame.pack(fill="both", expand=True, padx=10, pady=10)
@@ -32,33 +57,64 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Label(control_frame, text="顯示帳號：").pack(side="left")
     filter_var = tk.StringVar(value="全部")
-    filter_combo = ttk.Combobox(control_frame, textvariable=filter_var, values=["全部", "僅啟用", "僅停用"], width=10, state="readonly")
+    filter_combo = ttk.Combobox(
+        control_frame,
+        textvariable=filter_var,
+        values=["全部", "僅啟用", "僅停用"],
+        width=10,
+        state="readonly"
+    )
     filter_combo.pack(side="left", padx=(0, 10))
 
     sort_asc = tk.BooleanVar(value=True)
+
     def toggle_sort():
         sort_asc.set(not sort_asc.get())
         refresh_users()
 
-    tk.Button(control_frame, text="↕排序帳號", command=toggle_sort).pack(side="left")
+    tk.Button(control_frame, text="排序帳號", command=toggle_sort).pack(side="left")
 
-    columns = ("帳號", "角色", "新增", "刪除", "啟用", "上傳SOP", "SOP紀錄", "刪除紀錄", "SOP資訊", "帳號管理")
+    columns = (
+        "帳號",
+        "角色",
+        "新增SOP列",
+        "刪除SOP列",
+        "帳號啟用",
+        "上傳SOP",
+        "SOP紀錄",
+        "刪除紀錄",
+        "SOP資訊",
+        "帳號管理",
+        "可見治具",
+        "可編輯治具",
+        "可調帳治具",
+        "可見治具紀錄",
+        "刪除治具紀錄"
+    )
+
     tree = ttk.Treeview(frame, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
         tree.column(col, width=100, anchor="center")
     tree.pack(fill="both", expand=True, pady=5)
 
+    def _flag_text(v):
+        return "Y" if int(v or 0) == 1 else "N"
+
     def refresh_users():
         for row in tree.get_children():
             tree.delete(row)
-        with get_conn() as conn:
+        with _open_conn() as conn:
             cursor = conn.cursor()
-            sql = """SELECT username, role,
-                can_add, can_delete, active,
-                can_upload_sop, can_view_logs, can_delete_logs,
-                can_view_sop_info, can_manage_users
-                FROM users"""
+            sql = (
+                "SELECT username, role, "
+                "can_add, can_delete, active, "
+                "can_upload_sop, can_view_logs, can_delete_logs, "
+                "can_view_sop_info, can_manage_users, "
+                "can_view_fixture, can_edit_fixture, can_adjust_fixture, "
+                "can_view_fixture_logs, can_delete_fixture_logs "
+                "FROM users"
+            )
             condition = filter_var.get()
             if condition == "僅啟用":
                 sql += " WHERE active=1"
@@ -66,13 +122,10 @@ def build_user_management_tab(tab, db_name, current_user):
                 sql += " WHERE active=0"
             sql += f" ORDER BY username {'ASC' if sort_asc.get() else 'DESC'}"
             cursor.execute(sql)
-            for row in cursor.fetchall():
-                tags = ("disabled",) if row[4] == 0 else ()
-                display_row = [
-                    row[0],
-                    row[1],
-                    *["✓" if v else "✕" for v in row[2:]]
-                ]
+            for r in cursor.fetchall():
+                tags = ("disabled",) if int(r[4] or 0) == 0 else ()
+                flags = [_flag_text(v) for v in r[2:]]
+                display_row = [r[0], r[1], *flags]
                 tree.insert("", "end", values=display_row, tags=tags)
         tree.tag_configure("disabled", foreground="gray")
 
@@ -99,21 +152,26 @@ def build_user_management_tab(tab, db_name, current_user):
 
     tk.Label(form, text="專長：").grid(row=2, column=2, sticky="e", padx=5)
     specialty_var = tk.StringVar(value="")
-    specialty_combo = ttk.Combobox(form, textvariable=specialty_var,
-        values=["", "dip", "assembly", "test", "packaging", "oqc"], width=15, state="readonly")
+    specialty_combo = ttk.Combobox(
+        form,
+        textvariable=specialty_var,
+        values=["", "dip", "assembly", "test", "packaging", "oqc"],
+        width=15,
+        state="readonly"
+    )
     specialty_combo.grid(row=2, column=3, sticky="w", padx=5)
 
     permission_vars = {}
-    row = 3
-    col = 0
+    row_idx = 3
+    col_idx = 0
     for key, perm in PERMISSION_FLAGS.items():
         var = tk.IntVar(value=perm["default"])
         permission_vars[key] = var
-        tk.Checkbutton(form, text=perm["label"], variable=var).grid(row=row, column=col, sticky="w", padx=5, pady=5)
-        col += 1
-        if col > 3:
-            col = 0
-            row += 1
+        tk.Checkbutton(form, text=perm["label"], variable=var).grid(row=row_idx, column=col_idx, sticky="w", padx=5, pady=5)
+        col_idx += 1
+        if col_idx > 3:
+            col_idx = 0
+            row_idx += 1
 
     def collect_permission_values():
         return {k: v.get() for k, v in permission_vars.items()}
@@ -139,7 +197,7 @@ def build_user_management_tab(tab, db_name, current_user):
 
         hashed_pw = hash_password(new_pw)
 
-        with get_conn() as conn:
+        with _open_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users WHERE username=?", (new_user,))
             if cursor.fetchone():
@@ -149,22 +207,23 @@ def build_user_management_tab(tab, db_name, current_user):
             fields = ["username", "password", "role", "specialty"] + list(permission_vars.keys())
             placeholders = ", ".join(["?"] * len(fields))
             sql = f"INSERT INTO users ({', '.join(fields)}) VALUES ({placeholders})"
-            values = [new_user, hashed_pw, role, specialty_var.get()] + [permission_vars[k].get() for k in permission_vars]
+            values = [new_user, hashed_pw, role, specialty_var.get()] + [permissions[k] for k in permission_vars.keys()]
             cursor.execute(sql, values)
             conn.commit()
 
         messagebox.showinfo("成功", "使用者已新增")
-        log_activity(user=current_user["user"], action="add_user", filename=new_user, module="帳號管理")
+        if current_username:
+            log_activity(user=current_username, action="add_user", filename=new_user, module="帳號管理")
+
         entry_user.delete(0, tk.END)
         entry_pass.delete(0, tk.END)
+
         for k, v in permission_vars.items():
-            if k in ("can_add", "can_upload_sop", "can_view_logs", "can_view_sop_info"):
-                v.set(1)
-            else:
-                v.set(0)
+            v.set(PERMISSION_FLAGS[k]["default"])
+
         refresh_users()
 
-    tk.Button(form, text="新增使用者", command=add_user, bg="lightblue").grid(row=5, column=1, pady=10)
+    tk.Button(form, text="新增使用者", command=add_user, bg="lightblue").grid(row=row_idx + 2, column=1, pady=10)
 
     edit_frame = tk.LabelFrame(form_container, text="修改權限")
     edit_frame.pack(side="left", fill="both", expand=True)
@@ -198,20 +257,20 @@ def build_user_management_tab(tab, db_name, current_user):
         entry_edit_user.insert(0, username)
         role_edit.set(item[1])
 
-        with get_conn() as conn:
+        with _open_conn() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT specialty FROM users WHERE username=?", (username,))
             specialty = cursor.fetchone()
             edit_specialty.set(specialty[0] if specialty else "")
 
-            cursor.execute(f"""
-                SELECT {', '.join(permission_vars.keys())}
-                FROM users WHERE username=?
-            """, (username,))
+            cursor.execute(
+                "SELECT " + ", ".join(permission_vars.keys()) + " FROM users WHERE username=?",
+                (username,)
+            )
             result = cursor.fetchone()
             if result:
                 for i, key in enumerate(permission_vars):
-                    permission_vars[key].set(result[i])
+                    permission_vars[key].set(int(result[i] or 0))
 
     tree.bind("<<TreeviewSelect>>", on_select_user)
 
@@ -222,7 +281,7 @@ def build_user_management_tab(tab, db_name, current_user):
             return
 
         original_username = tree.item(selected[0])["values"][0]
-        if original_username == current_user["user"]:
+        if original_username == current_username and current_username:
             messagebox.showerror("錯誤", "無法修改當前登入帳號")
             return
 
@@ -232,7 +291,11 @@ def build_user_management_tab(tab, db_name, current_user):
         specialty = edit_specialty.get()
         permissions = {k: v.get() for k, v in permission_vars.items()}
 
-        with get_conn() as conn:
+        if not role:
+            messagebox.showerror("錯誤", "請選擇角色")
+            return
+
+        with _open_conn() as conn:
             cursor = conn.cursor()
 
             if new_username and new_username != original_username:
@@ -248,37 +311,51 @@ def build_user_management_tab(tab, db_name, current_user):
                     messagebox.showerror("錯誤", "新密碼須為6～12碼英文或數字組成")
                     return
                 hashed_pw = hash_password(new_pass)
-                cursor.execute("""
-                    UPDATE users SET password=?, role=?, specialty=?,
-                        can_add=?, can_delete=?, active=?,
-                        can_view_logs=?, can_delete_logs=?, can_upload_sop=?,
-                        can_view_sop_info=?, can_manage_users=?
-                    WHERE username=?
-                """, (
+                sql = (
+                    "UPDATE users SET password=?, role=?, specialty=?, "
+                    "can_add=?, can_delete=?, active=?, "
+                    "can_view_logs=?, can_delete_logs=?, can_upload_sop=?, "
+                    "can_view_sop_info=?, can_manage_users=?, "
+                    "can_view_fixture=?, can_edit_fixture=?, can_adjust_fixture=?, "
+                    "can_view_fixture_logs=?, can_delete_fixture_logs=? "
+                    "WHERE username=?"
+                )
+                params = (
                     hashed_pw, role, specialty,
                     permissions["can_add"], permissions["can_delete"], permissions["active"],
                     permissions["can_view_logs"], permissions["can_delete_logs"], permissions["can_upload_sop"],
                     permissions["can_view_sop_info"], permissions["can_manage_users"],
+                    permissions["can_view_fixture"], permissions["can_edit_fixture"], permissions["can_adjust_fixture"],
+                    permissions["can_view_fixture_logs"], permissions["can_delete_fixture_logs"],
                     original_username
-                ))
+                )
+                cursor.execute(sql, params)
             else:
-                cursor.execute("""
-                    UPDATE users SET role=?, specialty=?,
-                        can_add=?, can_delete=?, active=?,
-                        can_view_logs=?, can_delete_logs=?, can_upload_sop=?,
-                        can_view_sop_info=?, can_manage_users=?
-                    WHERE username=?
-                """, (
+                sql = (
+                    "UPDATE users SET role=?, specialty=?, "
+                    "can_add=?, can_delete=?, active=?, "
+                    "can_view_logs=?, can_delete_logs=?, can_upload_sop=?, "
+                    "can_view_sop_info=?, can_manage_users=?, "
+                    "can_view_fixture=?, can_edit_fixture=?, can_adjust_fixture=?, "
+                    "can_view_fixture_logs=?, can_delete_fixture_logs=? "
+                    "WHERE username=?"
+                )
+                params = (
                     role, specialty,
                     permissions["can_add"], permissions["can_delete"], permissions["active"],
                     permissions["can_view_logs"], permissions["can_delete_logs"], permissions["can_upload_sop"],
                     permissions["can_view_sop_info"], permissions["can_manage_users"],
+                    permissions["can_view_fixture"], permissions["can_edit_fixture"], permissions["can_adjust_fixture"],
+                    permissions["can_view_fixture_logs"], permissions["can_delete_fixture_logs"],
                     original_username
-                ))
+                )
+                cursor.execute(sql, params)
+
             conn.commit()
 
         messagebox.showinfo("成功", "已更新")
-        log_activity(user=current_user["user"], action="update_user", filename=original_username, module="帳號管理")
+        if current_username:
+            log_activity(user=current_username, action="update_user", filename=original_username, module="帳號管理")
         entry_edit_user.delete(0, tk.END)
         entry_edit_pass.delete(0, tk.END)
         refresh_users()
@@ -289,21 +366,21 @@ def build_user_management_tab(tab, db_name, current_user):
             messagebox.showwarning("未選擇", "請選擇帳號")
             return
         username = tree.item(selected[0])["values"][0]
-        if username == current_user["user"]:
+        if username == current_username and current_username:
             messagebox.showerror("錯誤", "無法刪除自己")
             return
-        if messagebox.askyesno("確認", f"是否確定要刪除帳號「{username}」？"):
-            with get_conn() as conn:
+        if messagebox.askyesno("確認", f"是否確定要停用帳號「{username}」？"):
+            with _open_conn() as conn:
                 cursor = conn.cursor()
-                cursor.execute("DELETE FROM users WHERE username=?", (username,))
+                cursor.execute("UPDATE users SET active=0 WHERE username=?", (username,))
                 conn.commit()
-            messagebox.showinfo("成功", "使用者已刪除")
-            log_activity(user=current_user["user"], action="delete_user", filename=username, module="帳號管理")
+            messagebox.showinfo("成功", "使用者已停用")
+            if current_username:
+                log_activity(user=current_username, action="disable_user", filename=username, module="帳號管理")
             refresh_users()
 
     tk.Button(edit_frame, text="更新權限", command=update_user).grid(row=5, column=1, pady=5)
-    tk.Button(edit_frame, text="刪除帳號", command=delete_user, bg="lightcoral", fg="white")\
-        .grid(row=5, column=2, padx=10, pady=5)
+    tk.Button(edit_frame, text="停用帳號", command=delete_user, bg="lightcoral", fg="white").grid(row=5, column=2, padx=10, pady=5)
 
     refresh_users()
     return tree, refresh_users

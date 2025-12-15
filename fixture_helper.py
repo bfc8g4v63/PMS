@@ -32,6 +32,11 @@ CORE_WAREHOUSES = [
     "不良品"
 ]
 
+MAX_LOCATION_CAR = 9
+MAX_LOCATION_LAYER = 4
+MAX_LOCATION_POS = 50
+
+
 def validate_part_no_by_category(category: str, part_no: str):
     part_no = (part_no or "").strip()
     prefix = CATEGORY_PREFIX.get(category)
@@ -41,6 +46,7 @@ def validate_part_no_by_category(category: str, part_no: str):
         raise ValueError("料號長度僅允許 8 或 12 碼")
     if not part_no.startswith(prefix):
         raise ValueError(f"料號須以 {prefix} 開頭（對應 {category}）")
+
 
 def generate_part_no_by_category(category: str) -> str:
     prefix = CATEGORY_PREFIX.get(category)
@@ -52,13 +58,19 @@ def generate_part_no_by_category(category: str) -> str:
         cur.execute("SELECT part_no FROM fixtures WHERE part_no LIKE ?", (f"{prefix}%",))
         rows = cur.fetchall()
 
-    existing = sorted(int(r[0]) for r in rows if r[0].isdigit())
+    existing = set()
+    for r in rows:
+        v = r[0]
+        if v and str(v).isdigit() and len(str(v)) == 8:
+            existing.add(int(v))
+
     next_suffix = 1
     while True:
-        candidate = int(f"{prefix}{next_suffix:05d}")
-        if candidate not in existing:
-            return f"{candidate}"
+        candidate_int = int(f"{prefix}{next_suffix:05d}")
+        if candidate_int not in existing:
+            return str(candidate_int)
         next_suffix += 1
+
 
 def ensure_schemas():
     with get_conn() as conn:
@@ -106,6 +118,21 @@ def ensure_schemas():
             fixture_bom_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS fixture_adjustment_logs (
+            adjustment_log_id TEXT PRIMARY KEY,
+            adjustment_log_part_no TEXT,
+            adjustment_log_warehouse TEXT,
+            adjustment_log_mode TEXT,
+            adjustment_log_before_qty INTEGER,
+            adjustment_log_after_qty INTEGER,
+            adjustment_log_delta_qty INTEGER,
+            adjustment_log_reason TEXT,
+            adjustment_log_user TEXT,
+            adjustment_log_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        conn.commit()
 
 def ensure_stock_consistency():
     with tx() as conn:
@@ -115,19 +142,66 @@ def ensure_stock_consistency():
         for part_no, safety, location in rows:
             for wh in CORE_WAREHOUSES:
                 ss = safety if wh == "虹堡" else 0
-                loc = location if wh == "虹堡" else ""
                 cur.execute("""
                     INSERT OR IGNORE INTO warehouse_stock(part_no, warehouse, usable_qty, safety_stock)
                     VALUES (?,?,0,?)
                 """, (part_no, wh, ss))
+                cur.execute("""
+                    UPDATE warehouse_stock SET safety_stock=?
+                    WHERE part_no=? AND warehouse=?
+                """, (ss, part_no, wh))
         conn.commit()
 
-def _is_admin(user: str) -> bool:
+
+def _get_user_flag(username: str, col: str) -> int:
+    u = (username or "").strip()
+    if not u:
+        return 0
     with get_conn() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT role FROM users WHERE username=?", (user,))
+        cur.execute("PRAGMA table_info(users)")
+        cols = [r[1] for r in cur.fetchall()]
+        if col not in cols:
+            return 0
+        cur.execute(f"SELECT {col} FROM users WHERE username=?", (u,))
         row = cur.fetchone()
-        return row and row[0] == "admin"
+        return int(row[0] or 0) if row else 0
+
+
+def _is_admin(user: str) -> bool:
+    u = (user or "").strip()
+    if not u:
+        return False
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT role FROM users WHERE username=?", (u,))
+        row = cur.fetchone()
+        return bool(row and row[0] == "admin")
+
+
+def _can_adjust(user: str) -> bool:
+    if _is_admin(user):
+        return True
+    return _get_user_flag(user, "can_adjust_fixture") == 1
+
+
+def _validate_warehouse(warehouse: str):
+    w = (warehouse or "").strip()
+    if w not in CORE_WAREHOUSES:
+        raise ValueError("倉別不存在")
+    return w
+
+
+def _ensure_stock_row(cur, part_no: str, warehouse: str, safety_stock_value: int):
+    cur.execute("""
+        INSERT OR IGNORE INTO warehouse_stock(part_no, warehouse, usable_qty, safety_stock)
+        VALUES (?,?,0,?)
+    """, (part_no, warehouse, int(safety_stock_value or 0)))
+    cur.execute("""
+        UPDATE warehouse_stock SET safety_stock=?
+        WHERE part_no=? AND warehouse=?
+    """, (int(safety_stock_value or 0), part_no, warehouse))
+
 
 def insert_fixture(part_no, part_name, part_spec, part_group,
                    unit_price_ntd, safety_stock, storage_location,
@@ -137,7 +211,7 @@ def insert_fixture(part_no, part_name, part_spec, part_group,
     if not storage_location or safety_stock is None:
         raise ValueError("建立治具必須包含儲位與安庫")
 
-    unit_price_usd = int(unit_price_usd * 1000) / 1000.0
+    unit_price_usd = int(float(unit_price_usd or 0) * 1000) / 1000.0
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
@@ -155,26 +229,36 @@ def insert_fixture(part_no, part_name, part_spec, part_group,
         """, (part_no, part_name, part_spec, part_group,
               unit_price_ntd, unit_price_usd,
               safety_stock, storage_location))
+
         for wh in CORE_WAREHOUSES:
-            ss = safety_stock if wh == "虹堡" else 0
-            cur.execute("""
-            INSERT OR REPLACE INTO warehouse_stock(part_no, warehouse, usable_qty, safety_stock)
-            VALUES (?,?,COALESCE((SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?),0),?)
-            """, (part_no, wh, part_no, wh, ss))
+            ss = int(safety_stock or 0) if wh == "虹堡" else 0
+            _ensure_stock_row(cur, part_no, wh, ss)
+
     log_fixture_activity(part_no, "insert_fixture", user=user)
+
 
 def delete_fixture(part_no, user=""):
     if not _is_admin(user):
         raise PermissionError("僅限管理員可刪除治具")
 
-    with get_conn() as conn:
+    part_no = (part_no or "").strip()
+    if not part_no:
+        raise ValueError("治具料號不可為空")
+
+    with tx() as conn:
         cur = conn.cursor()
+        cur.execute("SELECT 1 FROM fixtures WHERE part_no=?", (part_no,))
+        if not cur.fetchone():
+            raise ValueError(f"治具料號 {part_no} 不存在")
+
         cur.execute("DELETE FROM warehouse_stock WHERE part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixture_boms WHERE fixture_bom_parent_no=? OR fixture_bom_child_no=?", (part_no, part_no))
         cur.execute("DELETE FROM transfer_logs WHERE transfer_log_part_no = ?", (part_no,))
+        cur.execute("DELETE FROM fixture_adjustment_logs WHERE adjustment_log_part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixtures WHERE part_no = ?", (part_no,))
-        conn.commit()
+
     log_fixture_activity(part_no, "delete_fixture", user=user)
+
 
 def update_fixture(part_no, part_name=None, part_spec=None, part_group=None,
                    unit_price_ntd=None, unit_price_usd=None,
@@ -191,7 +275,7 @@ def update_fixture(part_no, part_name=None, part_spec=None, part_group=None,
         if conflict:
             raise ValueError(f"儲位 {storage_location} 已被治具料號 {conflict[0]} 使用")
         if unit_price_usd is not None:
-            unit_price_usd = int(unit_price_usd * 1000) / 1000.0
+            unit_price_usd = int(float(unit_price_usd or 0) * 1000) / 1000.0
         cur.execute("""
         UPDATE fixtures
         SET part_name=?, part_spec=?, part_group=?,
@@ -202,52 +286,180 @@ def update_fixture(part_no, part_name=None, part_spec=None, part_group=None,
               unit_price_ntd, unit_price_usd,
               safety_stock, storage_location, part_no))
         for wh in CORE_WAREHOUSES:
-            ss = safety_stock if wh == "虹堡" else 0
+            ss = int(safety_stock or 0) if wh == "虹堡" else 0
             cur.execute("""
             UPDATE warehouse_stock
             SET safety_stock=?
             WHERE part_no=? AND warehouse=?
             """, (ss, part_no, wh))
-    log_fixture_activity(part_no, "update_fixture", user=user)        
+
+    log_fixture_activity(part_no, "update_fixture", user=user)
+
 
 def add_stock(part_no, qty, warehouse, user=""):
-    if qty <= 0:
+    warehouse = _validate_warehouse(warehouse)
+    try:
+        qty_val = int(qty)
+    except:
+        raise ValueError("入庫量必須是整數")
+    if qty_val <= 0:
         raise ValueError("入庫量必須大於0")
-    with get_conn() as conn:
-        cur = conn.cursor()
-        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
-                    (qty, part_no, warehouse))
-        conn.commit()
-    log_fixture_activity(part_no, "add_stock", qty, to_wh=warehouse, user=user)
 
-def transfer_stock(part_no, qty, from_wh, to_wh, user=""):
-    if qty <= 0:
-        raise ValueError("調撥量必須大於0")
+    part_no = (part_no or "").strip()
+    if not part_no:
+        raise ValueError("治具料號不可為空")
+
     with tx() as conn:
         cur = conn.cursor()
-        cur.execute("SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
-                    (part_no, from_wh))
+        cur.execute("SELECT safety_stock FROM fixtures WHERE part_no=?", (part_no,))
+        r = cur.fetchone()
+        if not r:
+            raise ValueError(f"治具料號 {part_no} 不存在")
+        master_safety = int(r[0] or 0)
+        ss = master_safety if warehouse == "虹堡" else 0
+        _ensure_stock_row(cur, part_no, warehouse, ss)
+
+        cur.execute(
+            "UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
+            (qty_val, part_no, warehouse)
+        )
+        if cur.rowcount == 0:
+            raise ValueError("入庫失敗，找不到對應倉別資料列")
+
+    log_fixture_activity(part_no, "add_stock", qty_val, to_wh=warehouse, user=user)
+
+
+def transfer_stock(part_no, qty, from_wh, to_wh, user=""):
+    from_wh = _validate_warehouse(from_wh)
+    to_wh = _validate_warehouse(to_wh)
+    if from_wh == to_wh:
+        raise ValueError("來源與目標倉別相同")
+
+    try:
+        qty_val = int(qty)
+    except:
+        raise ValueError("調撥量必須是整數")
+    if qty_val <= 0:
+        raise ValueError("調撥量必須大於0")
+
+    part_no = (part_no or "").strip()
+    if not part_no:
+        raise ValueError("治具料號不可為空")
+
+    with tx() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT safety_stock FROM fixtures WHERE part_no=?", (part_no,))
+        r = cur.fetchone()
+        if not r:
+            raise ValueError(f"治具料號 {part_no} 不存在")
+        master_safety = int(r[0] or 0)
+
+        ss_from = master_safety if from_wh == "虹堡" else 0
+        ss_to = master_safety if to_wh == "虹堡" else 0
+        _ensure_stock_row(cur, part_no, from_wh, ss_from)
+        _ensure_stock_row(cur, part_no, to_wh, ss_to)
+
+        cur.execute(
+            "SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
+            (part_no, from_wh)
+        )
         row = cur.fetchone()
-        if not row or row[0] < qty:
+        if not row or int(row[0] or 0) < qty_val:
             raise ValueError("來源倉庫數量不足")
-        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty - ? WHERE part_no=? AND warehouse=?",
-                    (qty, part_no, from_wh))
-        cur.execute("UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
-                    (qty, part_no, to_wh))
+
+        cur.execute(
+            "UPDATE warehouse_stock SET usable_qty = usable_qty - ? WHERE part_no=? AND warehouse=?",
+            (qty_val, part_no, from_wh)
+        )
+        cur.execute(
+            "UPDATE warehouse_stock SET usable_qty = usable_qty + ? WHERE part_no=? AND warehouse=?",
+            (qty_val, part_no, to_wh)
+        )
+
         log_id = uuid.uuid4().hex
         cur.execute("""
-        INSERT INTO transfer_logs(transfer_log_id, transfer_log_part_no, transfer_log_qty, transfer_log_from_wh, transfer_log_to_wh, transfer_log_user)
+        INSERT INTO transfer_logs(
+            transfer_log_id, transfer_log_part_no, transfer_log_qty,
+            transfer_log_from_wh, transfer_log_to_wh, transfer_log_user
+        )
         VALUES (?,?,?,?,?,?)
-        """, (log_id, part_no, qty, from_wh, to_wh, user))
-    log_fixture_activity(part_no, "transfer_stock", qty, from_wh=from_wh, to_wh=to_wh, user=user)
+        """, (log_id, part_no, qty_val, from_wh, to_wh, (user or "").strip()))
 
-def get_stock(part_no, warehouse):
-    with get_conn() as conn:
+    log_fixture_activity(part_no, "transfer_stock", qty_val, from_wh=from_wh, to_wh=to_wh, user=user)
+
+
+def adjust_stock(part_no: str, warehouse: str, mode: str, qty: int, reason: str, user: str = ""):
+    if not _can_adjust(user or ""):
+        raise PermissionError("僅限管理員或具調帳權限者可調帳")
+    if not part_no or not part_no.strip():
+        raise ValueError("治具料號不可為空")
+
+    warehouse = _validate_warehouse(warehouse)
+
+    if reason is None or str(reason).strip() == "":
+        raise ValueError("調帳原因不可為空")
+
+    mode = (mode or "").strip()
+    if mode not in ("差額", "盤點"):
+        raise ValueError("調帳模式必須為 差額 或 盤點")
+
+    try:
+        qty_val = int(qty)
+    except:
+        raise ValueError("調帳數量必須是整數")
+
+    with tx() as conn:
         cur = conn.cursor()
         cur.execute("SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
                     (part_no, warehouse))
         row = cur.fetchone()
-        return row[0] if row else 0
+        if not row:
+            raise ValueError("找不到該料號在此倉別的資料")
+        before_qty = int(row[0] or 0)
+
+        if mode == "差額":
+            delta_qty = qty_val
+            after_qty = before_qty + delta_qty
+        else:
+            after_qty = qty_val
+            delta_qty = after_qty - before_qty
+
+        if after_qty < 0:
+            raise ValueError("調帳後可用數量不可為負數")
+
+        cur.execute(
+            "UPDATE warehouse_stock SET usable_qty=? WHERE part_no=? AND warehouse=?",
+            (after_qty, part_no, warehouse)
+        )
+
+        log_id = uuid.uuid4().hex
+        cur.execute("""
+        INSERT INTO fixture_adjustment_logs(
+            adjustment_log_id, adjustment_log_part_no, adjustment_log_warehouse,
+            adjustment_log_mode, adjustment_log_before_qty, adjustment_log_after_qty, adjustment_log_delta_qty,
+            adjustment_log_reason, adjustment_log_user
+        )
+        VALUES (?,?,?,?,?,?,?,?,?)
+        """, (
+            log_id, part_no, warehouse,
+            mode, before_qty, after_qty, delta_qty,
+            str(reason).strip(), (user or "").strip()
+        ))
+
+    log_fixture_activity(part_no, "adjust_stock", delta_qty, from_wh=warehouse, to_wh=warehouse, user=user)
+
+
+def get_stock(part_no, warehouse):
+    warehouse = _validate_warehouse(warehouse)
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT usable_qty FROM warehouse_stock WHERE part_no=? AND warehouse=?",
+            (part_no, warehouse)
+        )
+        row = cur.fetchone()
+        return int(row[0] or 0) if row else 0
+
 
 def get_fixture_by_part_no(part_no):
     with get_conn() as conn:
@@ -272,8 +484,10 @@ def get_fixture_by_part_no(part_no):
             }
             for r in rows
         ]
-    
+
+
 def get_overview_by_warehouse(warehouse):
+    warehouse = _validate_warehouse(warehouse)
     with get_conn() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -289,6 +503,7 @@ def get_overview_by_warehouse(warehouse):
         """, (warehouse, warehouse, warehouse))
         return cur.fetchall()
 
+
 def validate_location(part_no: str, raw: str) -> str:
     s = (raw or "").strip()
     parts = s.split("-")
@@ -300,12 +515,12 @@ def validate_location(part_no: str, raw: str) -> str:
         pos = int(parts[2])
     except:
         raise ValueError("儲位格式必須為數字，例如 1-1-1")
-    if not (1 <= car <= 9):
-        raise ValueError("車號必須介於 1~9")
-    if not (1 <= layer <= 4):
-        raise ValueError("層號必須介於 1~4")
-    if not (1 <= pos <= 50):
-        raise ValueError("位置必須介於 1~50")
+    if not (1 <= car <= MAX_LOCATION_CAR):
+        raise ValueError(f"車號必須介於 1~{MAX_LOCATION_CAR}")
+    if not (1 <= layer <= MAX_LOCATION_LAYER):
+        raise ValueError(f"層號必須介於 1~{MAX_LOCATION_LAYER}")
+    if not (1 <= pos <= MAX_LOCATION_POS):
+        raise ValueError(f"位置必須介於 1~{MAX_LOCATION_POS}")
     formatted = f"{car}-{layer}-{pos}"
     with get_conn() as conn:
         cur = conn.cursor()
@@ -318,25 +533,29 @@ def validate_location(part_no: str, raw: str) -> str:
             raise ValueError(f"儲位 {formatted} 已被治具料號 {row[0]} 使用")
     return formatted
 
+
 def generate_location(prefix: str):
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("SELECT storage_location FROM fixtures WHERE storage_location IS NOT NULL")
-        used = {row[0] for row in cur.fetchall()}
+        used = {row[0] for row in cur.fetchall() if row and row[0]}
 
+    prefix = (prefix or "").strip()
     if not prefix:
-        for car in range(1, 10):
-            for level in range(1, 5):
-                for pos in range(1, 51):
+        for car in range(1, MAX_LOCATION_CAR + 1):
+            for level in range(1, MAX_LOCATION_LAYER + 1):
+                for pos in range(1, MAX_LOCATION_POS + 1):
                     candidate = f"{car}-{level}-{pos}"
                     if candidate not in used:
                         return candidate
         raise ValueError("所有儲位都已滿")
 
     if prefix.isdigit():
-        car = prefix
-        for level in range(1, 5):
-            for pos in range(1, 51):
+        car = int(prefix)
+        if not (1 <= car <= MAX_LOCATION_CAR):
+            raise ValueError(f"車號必須介於 1~{MAX_LOCATION_CAR}")
+        for level in range(1, MAX_LOCATION_LAYER + 1):
+            for pos in range(1, MAX_LOCATION_POS + 1):
                 candidate = f"{car}-{level}-{pos}"
                 if candidate not in used:
                     return candidate
@@ -344,14 +563,20 @@ def generate_location(prefix: str):
 
     parts = prefix.split("-")
     if len(parts) == 2 and all(p.isdigit() for p in parts):
-        car, level = parts
-        for pos in range(1, 51):
+        car = int(parts[0])
+        level = int(parts[1])
+        if not (1 <= car <= MAX_LOCATION_CAR):
+            raise ValueError(f"車號必須介於 1~{MAX_LOCATION_CAR}")
+        if not (1 <= level <= MAX_LOCATION_LAYER):
+            raise ValueError(f"層號必須介於 1~{MAX_LOCATION_LAYER}")
+        for pos in range(1, MAX_LOCATION_POS + 1):
             candidate = f"{car}-{level}-{pos}"
             if candidate not in used:
                 return candidate
         raise ValueError(f"{car}-{level} 已滿，無可用儲位")
 
     raise ValueError("輸入格式錯誤，請輸入 車號 或 車號-層數")
+
 
 def get_bom_by_part(parent_part_no: str):
     with get_conn() as conn:
@@ -364,9 +589,15 @@ def get_bom_by_part(parent_part_no: str):
         """, (parent_part_no,))
         return cur.fetchall()
 
+
 def add_bom_item(parent_part_no: str, child_part_no: str, qty: int):
-    if qty <= 0:
+    try:
+        qty_val = int(qty)
+    except:
+        raise ValueError("BOM 數量必須是整數")
+    if qty_val <= 0:
         raise ValueError("BOM 數量必須大於0")
+
     with tx() as conn:
         cur = conn.cursor()
         cur.execute("""
@@ -375,17 +606,20 @@ def add_bom_item(parent_part_no: str, child_part_no: str, qty: int):
         """, (parent_part_no, child_part_no))
         row = cur.fetchone()
         if row:
-            new_qty = row[1] + qty
-            cur.execute("UPDATE fixture_boms SET fixture_bom_qty=? WHERE fixture_bom_id=?", (new_qty, row[0]))
+            new_qty = int(row[1] or 0) + qty_val
+            cur.execute(
+                "UPDATE fixture_boms SET fixture_bom_qty=? WHERE fixture_bom_id=?",
+                (new_qty, row[0])
+            )
         else:
             bom_id = uuid.uuid4().hex
             cur.execute("""
             INSERT INTO fixture_boms(fixture_bom_id, fixture_bom_parent_no, fixture_bom_child_no, fixture_bom_qty)
             VALUES (?,?,?,?)
-            """, (bom_id, parent_part_no, child_part_no, qty))
+            """, (bom_id, parent_part_no, child_part_no, qty_val))
+
 
 def delete_bom_item(bom_id: str):
-    with get_conn() as conn:
+    with tx() as conn:
         cur = conn.cursor()
         cur.execute("DELETE FROM fixture_boms WHERE fixture_bom_id=?", (bom_id,))
-        conn.commit()

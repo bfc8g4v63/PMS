@@ -14,30 +14,36 @@ import tkinter.font as tkFont
 from pathlib import Path
 from fixture_helper import ensure_stock_consistency
 from db_helper import get_conn, set_db_path
+from config import (
+    apply_db_path,
+    ENABLE_AUTO_LOGOUT,
+    IDLE_TIMEOUT,
+    VERBOSE_SCHEMA_CHECK,
+    USE_LOCAL_DB,
+    DB_NAME,
+    Z_DRIVE_DB,
+)
 
-from config import apply_db_path
-apply_db_path()
 from utils import log_activity, open_file
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
 from tkinter import ttk, filedialog, messagebox
 from datetime import datetime
 from changelog_tab import build_changelog_tab
-from config import ENABLE_AUTO_LOGOUT, IDLE_TIMEOUT
 from schema_helper import (
     get_required_columns,
     auto_add_missing_columns,
     ensure_changelog_schema,
     ensure_fixture_schema,
+    ensure_fixture_adjustment_schema,
     print_tables_info,
 )
-from config import VERBOSE_SCHEMA_CHECK
 from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from fixture_logs_tab import build_fixture_logs_tab
-from fixture_logger import ensure_fixture_log_schema 
-from config import USE_LOCAL_DB, DB_NAME, Z_DRIVE_DB, UNC_DB, ORIGINAL_DB, LOCAL_DB_PATH
+from fixture_logger import ensure_fixture_log_schema
 
+apply_db_path()
 print(f"使用資料庫：{DB_NAME}")
 set_db_path(DB_NAME)
 
@@ -203,6 +209,36 @@ def logout_and_exit(root):
 def hash_password(password):
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
+def ensure_admin_full_permissions(username):
+    try:
+        u = (username or "").strip()
+    except:
+        return
+    if not u:
+        return
+
+    with get_conn() as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT role FROM users WHERE username=?", (u,))
+        row = cur.fetchone()
+        if not row:
+            return
+        role_norm = (row[0] or "").strip().lower()
+        if role_norm != "admin":
+            return
+
+        cur.execute("PRAGMA table_info(users)")
+        cols = [r[1] for r in cur.fetchall()]
+        targets = [c for c in cols if c.startswith("can_")]
+        if "active" in cols:
+            targets.append("active")
+        if not targets:
+            return
+
+        set_sql = ", ".join([f"{c}=1" for c in targets])
+        cur.execute(f"UPDATE users SET {set_sql} WHERE username=?", (u,))
+        conn.commit()
+        
 def login():
 
     result = {
@@ -215,7 +251,12 @@ def login():
         "can_delete_logs": 0,
         "can_upload_sop": 0,
         "can_view_sop_info": 0,
-        "can_manage_users": 0
+        "can_manage_users": 0,
+        "can_view_fixture": 0,
+        "can_edit_fixture": 0,
+        "can_adjust_fixture": 0,
+        "can_view_fixture_logs": 0,
+        "can_delete_fixture_logs": 0
     }
 
     def try_login():
@@ -231,26 +272,65 @@ def login():
                 c = conn.cursor()
                 c.execute(
                     """
-                    SELECT role, can_add, can_delete, specialty, can_view_logs, can_delete_logs, can_upload_sop, can_view_sop_info, can_manage_users
+                    SELECT
+                        role,
+                        COALESCE(can_add, 0),
+                        COALESCE(can_delete, 0),
+                        COALESCE(specialty, ''),
+                        COALESCE(can_view_logs, 0),
+                        COALESCE(can_delete_logs, 0),
+                        COALESCE(can_upload_sop, 0),
+                        COALESCE(can_view_sop_info, 0),
+                        COALESCE(can_manage_users, 0),
+                        COALESCE(can_view_fixture, 0),
+                        COALESCE(can_edit_fixture, 0),
+                        COALESCE(can_adjust_fixture, 0),
+                        COALESCE(can_view_fixture_logs, 0),
+                        COALESCE(can_delete_fixture_logs, 0)
                     FROM users
                     WHERE username=? AND password=? AND active=1
                     """,
                     (u, hashed_pw),
                 )
+
                 r = c.fetchone()
                 if r:
+                    role_norm = (r[0] or "").strip().lower()
                     result.update({
                         "user": u,
-                        "role": r[0],
-                        "can_add": r[1],
-                        "can_delete": r[2],
-                        "specialty": r[3],
-                        "can_view_logs": r[4],
-                        "can_delete_logs": r[5],
-                        "can_upload_sop": r[6],
-                        "can_view_sop_info": r[7],
-                        "can_manage_users": r[8]
+                        "role": role_norm,
+                        "can_add": int(r[1] or 0),
+                        "can_delete": int(r[2] or 0),
+                        "specialty": r[3] or "",
+                        "can_view_logs": int(r[4] or 0),
+                        "can_delete_logs": int(r[5] or 0),
+                        "can_upload_sop": int(r[6] or 0),
+                        "can_view_sop_info": int(r[7] or 0),
+                        "can_manage_users": int(r[8] or 0),
+                        "can_view_fixture": int(r[9] or 0),
+                        "can_edit_fixture": int(r[10] or 0),
+                        "can_adjust_fixture": int(r[11] or 0),
+                        "can_view_fixture_logs": int(r[12] or 0),
+                        "can_delete_fixture_logs": int(r[13] or 0)
                     })
+
+                    if role_norm == "admin":
+                        result.update({
+                            "can_add": 1,
+                            "can_delete": 1,
+                            "can_view_logs": 1,
+                            "can_delete_logs": 1,
+                            "can_upload_sop": 1,
+                            "can_view_sop_info": 1,
+                            "can_manage_users": 1,
+                            "can_view_fixture": 1,
+                            "can_edit_fixture": 1,
+                            "can_adjust_fixture": 1,
+                            "can_view_fixture_logs": 1,
+                            "can_delete_fixture_logs": 1
+                        })
+                        ensure_admin_full_permissions(u)
+
                     print("目前使用的 DB 檔案路徑：", DB_NAME)
                     save_credentials(u, p, remember_var.get())
                     login_window.destroy()
@@ -353,9 +433,9 @@ def build_log_view_tab(tab, db_name, role):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            base_sql = """SELECT activity_log_id, activity_log_username, 
-                                 activity_log_action, activity_log_filename, 
-                                 activity_log_timestamp 
+            base_sql = """SELECT activity_log_id, activity_log_username,
+                                 activity_log_action, activity_log_filename,
+                                 activity_log_timestamp
                           FROM activity_logs"""
             params = []
             if role in restricted_roles:
@@ -474,6 +554,11 @@ def initialize_database():
                 can_manage_users INTEGER DEFAULT 0,
                 can_add INTEGER DEFAULT 1,
                 can_delete INTEGER DEFAULT 0,
+                can_view_fixture INTEGER DEFAULT 1,
+                can_edit_fixture INTEGER DEFAULT 0,
+                can_adjust_fixture INTEGER DEFAULT 0,
+                can_view_fixture_logs INTEGER DEFAULT 1,
+                can_delete_fixture_logs INTEGER DEFAULT 0,
                 active INTEGER DEFAULT 1
             )
         """)
@@ -630,21 +715,20 @@ def create_main_interface(root, db_name, login_info):
         right_frame.pack(side="left", fill="both", padx=10, pady=10)
         build_sop_upload_tab(left_frame, login_info, db_name)
         build_sop_apply_section(right_frame, login_info, db_name)
-        if tabs.get("治具紀錄"):
-            build_fixture_logs_tab(tabs["治具紀錄"])
 
-            def refresh_fixture_logs():
-                build_fixture_logs_tab(tabs["治具紀錄"], refresh_only=True)
-        else:
-            def refresh_fixture_logs():
-                pass
+    def refresh_fixture_logs():
+        if tabs.get("治具紀錄"):
+            build_fixture_logs_tab(tabs["治具紀錄"], refresh_only=True, current_user=current_user)
+
+    if current_role in ("admin", "engineer"):
+        if tabs.get("治具紀錄"):
+            build_fixture_logs_tab(tabs["治具紀錄"], current_user=current_user)
 
         if tabs.get("治具管理"):
             build_fixture_tab(tabs["治具管理"], current_user, on_change=refresh_fixture_logs)
 
         if tabs.get("測試BOM"):
             build_fixture_bom_tab(tabs["測試BOM"], current_user)
-
 
     if current_role == "admin" and tabs.get("帳號管理"):
         build_user_management_tab(tabs["帳號管理"], db_name, login_info)
@@ -1068,18 +1152,26 @@ if __name__ == "__main__":
         messagebox.showerror("錯誤", "本程式已在執行中，請勿重複開啟。")
         sys.exit()
 
+    try:
+        initialize_database()
+        auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=VERBOSE_SCHEMA_CHECK)
+        ensure_fixture_adjustment_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
+    except Exception as e:
+        messagebox.showerror("資料庫錯誤", f"資料庫結構初始化失敗，請用可寫入權限帳號執行一次更新。\n\n錯誤訊息：{e}")
+        sys.exit()
+
     login_info = login()
 
     if login_info and login_info.get("user"):
         current_role = login_info["role"]
 
         init_db(current_role)
-        initialize_database()
 
         if current_role in ("admin", "engineer"):
             ensure_changelog_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
             ensure_fixture_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
             ensure_fixture_log_schema()
+            ensure_fixture_adjustment_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
             auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=VERBOSE_SCHEMA_CHECK)
             ensure_stock_consistency()
 
@@ -1088,7 +1180,7 @@ if __name__ == "__main__":
 
         root = tk.Tk()
         root.title("生產管理平台")
-        root.geometry("1200x750")
+        root.geometry("1600x900")
 
         WARNING_TIMEOUT_MS = (IDLE_TIMEOUT - 60) * 1000
         IDLE_TIMEOUT_MS = IDLE_TIMEOUT * 1000
