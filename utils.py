@@ -37,7 +37,7 @@ ACTION_MAP = {
 }
 
 def log_activity(user, action, filename, module=None):
-    action = ACTION_MAP.get(action, action)
+    raw_action = (action or "").strip()
     with get_conn() as conn:
         cursor = conn.cursor()
         cursor.execute(
@@ -53,7 +53,7 @@ def log_activity(user, action, filename, module=None):
             """,
             (
                 user,
-                action,
+                raw_action,
                 filename,
                 datetime.now().strftime("%Y%m%dT%H%M%S"),
                 module,
@@ -64,9 +64,9 @@ def log_activity(user, action, filename, module=None):
 def safe_button_action(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
-        widget = kwargs.get('button')
+        widget = kwargs.get("button")
         if widget:
-            widget.config(state='disabled')
+            widget.config(state="disabled")
 
         def run():
             try:
@@ -75,7 +75,7 @@ def safe_button_action(func):
                 messagebox.showerror("錯誤", str(e))
             finally:
                 if widget:
-                    widget.config(state='normal')
+                    widget.config(state="normal")
 
         threading.Thread(target=run, daemon=True).start()
     return wrapper

@@ -32,6 +32,7 @@ def ensure_fixture_log_schema():
             "fixture_log_from_wh TEXT,"
             "fixture_log_to_wh TEXT,"
             "fixture_log_user TEXT,"
+            "fixture_log_reason TEXT,"
             "fixture_log_timestamp TEXT,"
             "fixture_log_deleted INTEGER DEFAULT 0,"
             "fixture_log_deleted_by TEXT,"
@@ -47,6 +48,8 @@ def ensure_fixture_log_schema():
             cur.execute("ALTER TABLE fixture_logs ADD COLUMN fixture_log_deleted_by TEXT")
         if "fixture_log_deleted_at" not in existing_cols:
             cur.execute("ALTER TABLE fixture_logs ADD COLUMN fixture_log_deleted_at TEXT")
+        if "fixture_log_reason" not in existing_cols:
+            cur.execute("ALTER TABLE fixture_logs ADD COLUMN fixture_log_reason TEXT")
 
         cur.execute(
             "CREATE TABLE IF NOT EXISTS fixture_log_audits ("
@@ -95,11 +98,12 @@ def generate_sheet_id(action_code: str, conn=None) -> str:
     return f"{like_prefix}{next_seq:04d}"
 
 
-def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", user="", raise_on_fail: bool = False):
+def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", user="", reason="", raise_on_fail: bool = False):
     part_no = "" if part_no is None else str(part_no).strip()
     from_wh = "" if from_wh is None else str(from_wh).strip()
     to_wh = "" if to_wh is None else str(to_wh).strip()
     user = "" if user is None else str(user).strip()
+    reason = "" if reason is None else str(reason).strip()
 
     try:
         qty_val = int(change_qty or 0)
@@ -108,6 +112,12 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
 
     _, action_name = FIXTURE_ACTION_MAP.get(action, ("Z", action))
     ts = datetime.now().strftime("%Y%m%dT%H%M%S")
+
+    if action == "adjust_stock":
+        if not reason:
+            raise ValueError("調帳必須填寫原因")
+    else:
+        reason = ""
 
     last_err = None
     for _ in range(6):
@@ -119,10 +129,10 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
                     "INSERT INTO fixture_logs ("
                     "fixture_log_id, fixture_log_part_no, fixture_log_action, "
                     "fixture_log_qty, fixture_log_from_wh, fixture_log_to_wh, "
-                    "fixture_log_user, fixture_log_timestamp, "
+                    "fixture_log_user, fixture_log_reason, fixture_log_timestamp, "
                     "fixture_log_deleted, fixture_log_deleted_by, fixture_log_deleted_at"
-                    ") VALUES (?,?,?,?,?,?,?,?,0,NULL,NULL)",
-                    (sheet_id, part_no, action_name, qty_val, from_wh, to_wh, user, ts),
+                    ") VALUES (?,?,?,?,?,?,?,?,?,0,NULL,NULL)",
+                    (sheet_id, part_no, action_name, qty_val, from_wh, to_wh, user, reason, ts),
                 )
             return sheet_id
         except sqlite3.IntegrityError as e:
@@ -203,6 +213,7 @@ def get_fixture_logs(part_no=None, user=None, action=None, start_ts=None, end_ts
         "l.fixture_log_from_wh, "
         "l.fixture_log_to_wh, "
         "l.fixture_log_user, "
+        "COALESCE(l.fixture_log_reason, ''), "
         "l.fixture_log_timestamp "
         "FROM fixture_logs l "
         "LEFT JOIN fixtures f ON l.fixture_log_part_no = f.part_no "

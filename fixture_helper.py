@@ -118,21 +118,8 @@ def ensure_schemas():
             fixture_bom_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
         )
         """)
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS fixture_adjustment_logs (
-            adjustment_log_id TEXT PRIMARY KEY,
-            adjustment_log_part_no TEXT,
-            adjustment_log_warehouse TEXT,
-            adjustment_log_mode TEXT,
-            adjustment_log_before_qty INTEGER,
-            adjustment_log_after_qty INTEGER,
-            adjustment_log_delta_qty INTEGER,
-            adjustment_log_reason TEXT,
-            adjustment_log_user TEXT,
-            adjustment_log_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
         conn.commit()
+
 
 def ensure_stock_consistency():
     with tx() as conn:
@@ -254,7 +241,6 @@ def delete_fixture(part_no, user=""):
         cur.execute("DELETE FROM warehouse_stock WHERE part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixture_boms WHERE fixture_bom_parent_no=? OR fixture_bom_child_no=?", (part_no, part_no))
         cur.execute("DELETE FROM transfer_logs WHERE transfer_log_part_no = ?", (part_no,))
-        cur.execute("DELETE FROM fixture_adjustment_logs WHERE adjustment_log_part_no = ?", (part_no,))
         cur.execute("DELETE FROM fixtures WHERE part_no = ?", (part_no,))
 
     log_fixture_activity(part_no, "delete_fixture", user=user)
@@ -432,21 +418,15 @@ def adjust_stock(part_no: str, warehouse: str, mode: str, qty: int, reason: str,
             (after_qty, part_no, warehouse)
         )
 
-        log_id = uuid.uuid4().hex
-        cur.execute("""
-        INSERT INTO fixture_adjustment_logs(
-            adjustment_log_id, adjustment_log_part_no, adjustment_log_warehouse,
-            adjustment_log_mode, adjustment_log_before_qty, adjustment_log_after_qty, adjustment_log_delta_qty,
-            adjustment_log_reason, adjustment_log_user
-        )
-        VALUES (?,?,?,?,?,?,?,?,?)
-        """, (
-            log_id, part_no, warehouse,
-            mode, before_qty, after_qty, delta_qty,
-            str(reason).strip(), (user or "").strip()
-        ))
-
-    log_fixture_activity(part_no, "adjust_stock", delta_qty, from_wh=warehouse, to_wh=warehouse, user=user)
+    log_fixture_activity(
+        part_no,
+        "adjust_stock",
+        delta_qty,
+        from_wh=warehouse,
+        to_wh=warehouse,
+        user=user,
+        reason=str(reason).strip()
+    )
 
 
 def get_stock(part_no, warehouse):

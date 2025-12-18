@@ -7,13 +7,18 @@ import hashlib
 import sys
 import socket
 import shutil
-import atexit
 import time
 import json
 import tkinter.font as tkFont
 from pathlib import Path
+from tkinter import ttk, filedialog, messagebox
+from datetime import datetime
+
 from fixture_helper import ensure_stock_consistency
 from db_helper import get_conn, set_db_path
+from fixture_logger import ensure_fixture_log_schema
+from idle_logout import attach_idle_logout
+
 from config import (
     apply_db_path,
     ENABLE_AUTO_LOGOUT,
@@ -27,8 +32,6 @@ from config import (
 from utils import log_activity, open_file
 from account_management_tab import build_user_management_tab
 from sop_build_tab import build_sop_upload_tab, build_sop_apply_section
-from tkinter import ttk, filedialog, messagebox
-from datetime import datetime
 from changelog_tab import build_changelog_tab
 from schema_helper import (
     get_required_columns,
@@ -41,29 +44,14 @@ from schema_helper import (
 from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from fixture_logs_tab import build_fixture_logs_tab
-from fixture_logger import ensure_fixture_log_schema
 
-apply_db_path()
-print(f"使用資料庫：{DB_NAME}")
-set_db_path(DB_NAME)
-
-lock_path = os.path.join(os.environ.get("TEMP"), "PMS.lock")
-with open(lock_path, "w") as f:
-    f.write(str(time.time()))
-
-@atexit.register
-def remove_lock():
-    try:
-        os.remove(lock_path)
-    except:
-        pass
 
 SOP_FIELDS = {
     "dip": ("DIP SOP", "dip_sop", "dip_sop_bypass", r"DIP_SOP"),
     "assembly": ("組裝SOP", "assembly_sop", "assembly_sop_bypass", r"組裝SOP"),
     "test": ("測試SOP", "test_sop", "test_sop_bypass", r"測試SOP"),
     "packaging": ("包裝SOP", "packaging_sop", "packaging_sop_bypass", r"包裝SOP"),
-    "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC")
+    "oqc": ("檢查表OQC", "oqc_checklist", "oqc_checklist_bypass", r"檢查表OQC"),
 }
 
 DIP_SOP_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\DIP_SOP"
@@ -74,6 +62,7 @@ OQC_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查�
 
 LOG_TABLE = "activity_logs"
 _instance_lock = None
+
 
 def get_login_config_path():
     appdata_dir = os.environ.get("APPDATA")
@@ -86,6 +75,7 @@ def get_login_config_path():
         os.makedirs(base_dir, exist_ok=True)
     return os.path.join(base_dir, "login_config.json")
 
+
 def load_saved_credentials():
     config_path = get_login_config_path()
     if not os.path.exists(config_path):
@@ -93,12 +83,10 @@ def load_saved_credentials():
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             data = json.load(f)
-        return {
-            "username": data.get("username", ""),
-            "password": data.get("password", ""),
-        }
-    except:
+        return {"username": data.get("username", ""), "password": data.get("password", "")}
+    except Exception:
         return None
+
 
 def save_credentials(username, password, remember_password):
     config_path = get_login_config_path()
@@ -110,8 +98,9 @@ def save_credentials(username, password, remember_password):
     try:
         with open(config_path, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False)
-    except:
+    except Exception:
         pass
+
 
 def is_valid_file(file_path, field_name):
     allowed_extensions = [".pdf"]
@@ -120,11 +109,15 @@ def is_valid_file(file_path, field_name):
     ext = os.path.splitext(file_path)[1].lower()
     return ext in allowed_extensions
 
+
 def save_file_if_exist(file_path, target_folder, username, product_code, product_name, field_name):
     if not file_path:
         return "", ""
     if not is_valid_file(file_path, field_name):
-        messagebox.showerror("錯誤", f"這個檔案格式不合法：{file_path}\n只允許副檔名：.pdf{('、.xlsx' if field_name == 'oqc_checklist' else '')}")
+        messagebox.showerror(
+            "錯誤",
+            f"這個檔案格式不合法：{file_path}\n只允許副檔名：.pdf{('、.xlsx' if field_name == 'oqc_checklist' else '')}",
+        )
         return "", ""
     if not product_name:
         messagebox.showerror("錯誤", "品名為空，無法正確生成檔名")
@@ -144,25 +137,29 @@ def save_file_if_exist(file_path, target_folder, username, product_code, product
         print(f"檔案儲存失敗: {e}")
         return "", ""
 
+
 def is_another_instance_running():
     global _instance_lock
     try:
         _instance_lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        _instance_lock.bind(('localhost', 65432))
+        _instance_lock.bind(("localhost", 65432))
         return False
     except OSError:
         return True
+
 
 def init_db(role):
     if not os.path.exists(DB_NAME):
         messagebox.showerror("錯誤", f"找不到資料庫檔案：\n{DB_NAME}\n\n請確認您是從 PMS Launcher.bat 啟動，或 Z: 磁碟有正確掛載。")
         sys.exit()
+
     if role == "leader":
         if not os.access(DB_NAME, os.R_OK):
             raise IOError(f"無法讀取資料庫檔案：{DB_NAME}")
     else:
         if not os.access(DB_NAME, os.R_OK | os.W_OK):
             raise IOError(f"無法讀寫資料庫檔案：{DB_NAME}")
+
     try:
         with get_conn() as conn:
             pass
@@ -170,8 +167,9 @@ def init_db(role):
         messagebox.showerror("資料庫錯誤", f"無法開啟資料庫：\n{DB_NAME}\n\n錯誤訊息：{e}")
         sys.exit()
 
+
 def sync_back_to_server():
-    if USE_LOCAL_DB:
+    if not USE_LOCAL_DB:
         print("[雲端模式] 所有操作直接寫入網路 DB，無需回寫")
         return
 
@@ -189,30 +187,37 @@ def sync_back_to_server():
     except Exception as e:
         print(f"資料回寫失敗: {e}")
 
+
 def logout_and_exit(root):
     global _instance_lock
     try:
         root.update_idletasks()
         root.update()
-    except:
+    except Exception:
         pass
     finally:
         try:
-            _instance_lock.close()
-        except:
+            if _instance_lock is not None:
+                _instance_lock.close()
+        except Exception:
             pass
         if USE_LOCAL_DB:
             sync_back_to_server()
-        root.destroy()
+        try:
+            root.destroy()
+        except Exception:
+            pass
         os._exit(0)
 
+
 def hash_password(password):
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
 
 def ensure_admin_full_permissions(username):
     try:
         u = (username or "").strip()
-    except:
+    except Exception:
         return
     if not u:
         return
@@ -238,9 +243,9 @@ def ensure_admin_full_permissions(username):
         set_sql = ", ".join([f"{c}=1" for c in targets])
         cur.execute(f"UPDATE users SET {set_sql} WHERE username=?", (u,))
         conn.commit()
-        
-def login():
 
+
+def login():
     result = {
         "user": None,
         "role": None,
@@ -256,7 +261,7 @@ def login():
         "can_edit_fixture": 0,
         "can_adjust_fixture": 0,
         "can_view_fixture_logs": 0,
-        "can_delete_fixture_logs": 0
+        "can_delete_fixture_logs": 0,
     }
 
     def try_login():
@@ -271,64 +276,68 @@ def login():
             with get_conn() as conn:
                 c = conn.cursor()
                 c.execute(
-                    """
-                    SELECT
-                        role,
-                        COALESCE(can_add, 0),
-                        COALESCE(can_delete, 0),
-                        COALESCE(specialty, ''),
-                        COALESCE(can_view_logs, 0),
-                        COALESCE(can_delete_logs, 0),
-                        COALESCE(can_upload_sop, 0),
-                        COALESCE(can_view_sop_info, 0),
-                        COALESCE(can_manage_users, 0),
-                        COALESCE(can_view_fixture, 0),
-                        COALESCE(can_edit_fixture, 0),
-                        COALESCE(can_adjust_fixture, 0),
-                        COALESCE(can_view_fixture_logs, 0),
-                        COALESCE(can_delete_fixture_logs, 0)
-                    FROM users
-                    WHERE username=? AND password=? AND active=1
-                    """,
+                    (
+                        "SELECT "
+                        "role, "
+                        "COALESCE(can_add, 0), "
+                        "COALESCE(can_delete, 0), "
+                        "COALESCE(specialty, ''), "
+                        "COALESCE(can_view_logs, 0), "
+                        "COALESCE(can_delete_logs, 0), "
+                        "COALESCE(can_upload_sop, 0), "
+                        "COALESCE(can_view_sop_info, 0), "
+                        "COALESCE(can_manage_users, 0), "
+                        "COALESCE(can_view_fixture, 0), "
+                        "COALESCE(can_edit_fixture, 0), "
+                        "COALESCE(can_adjust_fixture, 0), "
+                        "COALESCE(can_view_fixture_logs, 0), "
+                        "COALESCE(can_delete_fixture_logs, 0) "
+                        "FROM users "
+                        "WHERE username=? AND password=? AND active=1"
+                    ),
                     (u, hashed_pw),
                 )
 
                 r = c.fetchone()
                 if r:
                     role_norm = (r[0] or "").strip().lower()
-                    result.update({
-                        "user": u,
-                        "role": role_norm,
-                        "can_add": int(r[1] or 0),
-                        "can_delete": int(r[2] or 0),
-                        "specialty": r[3] or "",
-                        "can_view_logs": int(r[4] or 0),
-                        "can_delete_logs": int(r[5] or 0),
-                        "can_upload_sop": int(r[6] or 0),
-                        "can_view_sop_info": int(r[7] or 0),
-                        "can_manage_users": int(r[8] or 0),
-                        "can_view_fixture": int(r[9] or 0),
-                        "can_edit_fixture": int(r[10] or 0),
-                        "can_adjust_fixture": int(r[11] or 0),
-                        "can_view_fixture_logs": int(r[12] or 0),
-                        "can_delete_fixture_logs": int(r[13] or 0)
-                    })
+                    result.update(
+                        {
+                            "user": u,
+                            "role": role_norm,
+                            "can_add": int(r[1] or 0),
+                            "can_delete": int(r[2] or 0),
+                            "specialty": r[3] or "",
+                            "can_view_logs": int(r[4] or 0),
+                            "can_delete_logs": int(r[5] or 0),
+                            "can_upload_sop": int(r[6] or 0),
+                            "can_view_sop_info": int(r[7] or 0),
+                            "can_manage_users": int(r[8] or 0),
+                            "can_view_fixture": int(r[9] or 0),
+                            "can_edit_fixture": int(r[10] or 0),
+                            "can_adjust_fixture": int(r[11] or 0),
+                            "can_view_fixture_logs": int(r[12] or 0),
+                            "can_delete_fixture_logs": int(r[13] or 0),
+                        }
+                    )
 
                     if role_norm == "admin":
-                        result.update({
-                            "can_add": 1,
-                            "can_delete": 1,
-                            "can_view_logs": 1,
-                            "can_delete_logs": 1,
-                            "can_upload_sop": 1,
-                            "can_view_sop_info": 1,
-                            "can_manage_users": 1,
-                            "can_view_fixture": 1,
-                            "can_edit_fixture": 1,
-                            "can_adjust_fixture": 1,
-                            "can_view_fixture_logs": 1,
-                            "can_delete_fixture_logs": 1
-                        })
+                        result.update(
+                            {
+                                "can_add": 1,
+                                "can_delete": 1,
+                                "can_view_logs": 1,
+                                "can_delete_logs": 1,
+                                "can_upload_sop": 1,
+                                "can_view_sop_info": 1,
+                                "can_manage_users": 1,
+                                "can_view_fixture": 1,
+                                "can_edit_fixture": 1,
+                                "can_adjust_fixture": 1,
+                                "can_view_fixture_logs": 1,
+                                "can_delete_fixture_logs": 1,
+                            }
+                        )
                         ensure_admin_full_permissions(u)
 
                     print("目前使用的 DB 檔案路徑：", DB_NAME)
@@ -344,7 +353,7 @@ def login():
     login_window.geometry("300x260")
     try:
         login_window.iconbitmap("PMS.ico")
-    except:
+    except Exception:
         pass
 
     tk.Label(login_window, text="使用者名稱：").pack(pady=(15, 5))
@@ -356,8 +365,7 @@ def login():
     entry_pass.pack()
 
     remember_var = tk.BooleanVar(value=False)
-    remember_check = tk.Checkbutton(login_window, text="記住密碼", variable=remember_var)
-    remember_check.pack(pady=(5, 0))
+    tk.Checkbutton(login_window, text="記住密碼", variable=remember_var).pack(pady=(5, 0))
 
     saved = load_saved_credentials()
     if saved:
@@ -367,8 +375,7 @@ def login():
             entry_pass.insert(0, saved.get("password"))
             remember_var.set(True)
 
-    login_btn = tk.Button(login_window, text="登入", command=try_login)
-    login_btn.pack(pady=15)
+    tk.Button(login_window, text="登入", command=try_login).pack(pady=15)
 
     entry_user.focus_set()
     entry_user.bind("<Return>", lambda e: entry_pass.focus_set())
@@ -381,6 +388,7 @@ def login():
     login_window.mainloop()
     return result
 
+
 def build_log_view_tab(tab, db_name, role):
     tk.Label(tab, text="SOP紀錄查詢").pack(anchor="w", padx=10, pady=(10, 0))
 
@@ -392,6 +400,7 @@ def build_log_view_tab(tab, db_name, role):
     entry_query.pack(side="left")
 
     sort_desc = tk.BooleanVar(value=True)
+
     def toggle_sort():
         sort_desc.set(not sort_desc.get())
         refresh_logs()
@@ -414,7 +423,7 @@ def build_log_view_tab(tab, db_name, role):
         for row in tree.get_children():
             tree.delete(row)
 
-        ACTION_MAP_LOCAL = {
+        action_map_local = {
             "add_user": "新增使用者",
             "update_user": "修改使用者",
             "delete_user": "刪除使用者",
@@ -433,21 +442,19 @@ def build_log_view_tab(tab, db_name, role):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            base_sql = """SELECT activity_log_id, activity_log_username,
-                                 activity_log_action, activity_log_filename,
-                                 activity_log_timestamp
-                          FROM activity_logs"""
+            base_sql = (
+                "SELECT activity_log_id, activity_log_username, "
+                "activity_log_action, activity_log_filename, activity_log_timestamp "
+                "FROM activity_logs"
+            )
             params = []
             if role in restricted_roles:
                 if keyword:
-                    base_sql += " WHERE (activity_log_username LIKE ? OR activity_log_action LIKE ? OR activity_log_filename LIKE ?) AND activity_log_action NOT IN ({})".format(
-                        ",".join("?" for _ in restricted_keywords)
-                    )
+                    base_sql += " WHERE (activity_log_username LIKE ? OR activity_log_action LIKE ? OR activity_log_filename LIKE ?)"
+                    base_sql += " AND activity_log_action NOT IN ({})".format(",".join("?" for _ in restricted_keywords))
                     params = [f"%{keyword}%"] * 3 + list(restricted_keywords)
                 else:
-                    base_sql += " WHERE activity_log_action NOT IN ({})".format(
-                        ",".join("?" for _ in restricted_keywords)
-                    )
+                    base_sql += " WHERE activity_log_action NOT IN ({})".format(",".join("?" for _ in restricted_keywords))
                     params = list(restricted_keywords)
             else:
                 if keyword:
@@ -458,7 +465,7 @@ def build_log_view_tab(tab, db_name, role):
             cursor.execute(base_sql, params)
             for row in cursor.fetchall():
                 log_id = row[0] if row[0] is not None else f"temp_{row[4]}"
-                action_display = ACTION_MAP_LOCAL.get(row[2], row[2])
+                action_display = action_map_local.get(row[2], row[2])
                 tree.insert("", "end", iid=str(log_id), values=(row[1], action_display, row[3], row[4]))
 
     def on_double_click(event):
@@ -484,6 +491,7 @@ def build_log_view_tab(tab, db_name, role):
     tk.Button(button_frame, text="重新整理", command=refresh_logs).pack(side="left", padx=5)
 
     if role == "admin":
+
         def delete_selected_log():
             selected = tree.selection()
             if not selected:
@@ -510,67 +518,75 @@ def build_log_view_tab(tab, db_name, role):
 
     refresh_logs()
 
+
 def initialize_database():
     with get_conn() as conn:
         cursor = conn.cursor()
-        cursor.execute(f"""
-            CREATE TABLE IF NOT EXISTS {LOG_TABLE} (
-                activity_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                activity_log_username TEXT,
-                activity_log_action TEXT,
-                activity_log_filename TEXT,
-                activity_log_timestamp TEXT,
-                activity_log_module TEXT
+        cursor.execute(
+            (
+                f"CREATE TABLE IF NOT EXISTS {LOG_TABLE} ("
+                "activity_log_id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "activity_log_username TEXT,"
+                "activity_log_action TEXT,"
+                "activity_log_filename TEXT,"
+                "activity_log_timestamp TEXT,"
+                "activity_log_module TEXT"
+                ")"
             )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sop_information (
-                product_code TEXT PRIMARY KEY,
-                product_name TEXT,
-                dip_sop TEXT,
-                assembly_sop TEXT,
-                test_sop TEXT,
-                packaging_sop TEXT,
-                oqc_checklist TEXT,
-                created_by TEXT,
-                created_at TEXT,
-                dip_sop_bypass INTEGER DEFAULT 0,
-                assembly_sop_bypass INTEGER DEFAULT 0,
-                test_sop_bypass INTEGER DEFAULT 0,
-                packaging_sop_bypass INTEGER DEFAULT 0,
-                oqc_checklist_bypass INTEGER DEFAULT 0
+        )
+        cursor.execute(
+            (
+                "CREATE TABLE IF NOT EXISTS sop_information ("
+                "product_code TEXT PRIMARY KEY,"
+                "product_name TEXT,"
+                "dip_sop TEXT,"
+                "assembly_sop TEXT,"
+                "test_sop TEXT,"
+                "packaging_sop TEXT,"
+                "oqc_checklist TEXT,"
+                "created_by TEXT,"
+                "created_at TEXT,"
+                "dip_sop_bypass INTEGER DEFAULT 0,"
+                "assembly_sop_bypass INTEGER DEFAULT 0,"
+                "test_sop_bypass INTEGER DEFAULT 0,"
+                "packaging_sop_bypass INTEGER DEFAULT 0,"
+                "oqc_checklist_bypass INTEGER DEFAULT 0"
+                ")"
             )
-        """)
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                username TEXT PRIMARY KEY,
-                password TEXT,
-                role TEXT DEFAULT 'user',
-                specialty TEXT DEFAULT '',
-                can_view_logs INTEGER DEFAULT 0,
-                can_delete_logs INTEGER DEFAULT 0,
-                can_upload_sop INTEGER DEFAULT 0,
-                can_view_sop_info INTEGER DEFAULT 0,
-                can_manage_users INTEGER DEFAULT 0,
-                can_add INTEGER DEFAULT 1,
-                can_delete INTEGER DEFAULT 0,
-                can_view_fixture INTEGER DEFAULT 1,
-                can_edit_fixture INTEGER DEFAULT 0,
-                can_adjust_fixture INTEGER DEFAULT 0,
-                can_view_fixture_logs INTEGER DEFAULT 1,
-                can_delete_fixture_logs INTEGER DEFAULT 0,
-                active INTEGER DEFAULT 1
+        )
+        cursor.execute(
+            (
+                "CREATE TABLE IF NOT EXISTS users ("
+                "username TEXT PRIMARY KEY,"
+                "password TEXT,"
+                "role TEXT DEFAULT 'user',"
+                "specialty TEXT DEFAULT '',"
+                "can_view_logs INTEGER DEFAULT 0,"
+                "can_delete_logs INTEGER DEFAULT 0,"
+                "can_upload_sop INTEGER DEFAULT 0,"
+                "can_view_sop_info INTEGER DEFAULT 0,"
+                "can_manage_users INTEGER DEFAULT 0,"
+                "can_add INTEGER DEFAULT 1,"
+                "can_delete INTEGER DEFAULT 0,"
+                "can_view_fixture INTEGER DEFAULT 1,"
+                "can_edit_fixture INTEGER DEFAULT 0,"
+                "can_adjust_fixture INTEGER DEFAULT 0,"
+                "can_view_fixture_logs INTEGER DEFAULT 1,"
+                "can_delete_fixture_logs INTEGER DEFAULT 0,"
+                "active INTEGER DEFAULT 1"
+                ")"
             )
-        """)
+        )
         conn.commit()
 
     print("資料庫初始化完成，實際位置：", DB_NAME)
     if hasattr(os, "sync"):
         try:
             os.sync()
-        except:
+        except Exception:
             pass
     auto_add_missing_columns(DB_NAME, get_required_columns())
+
 
 def save_file(file_path, target_folder, username, product_code=None, product_name=None, log=True):
     if not os.path.exists(file_path):
@@ -589,11 +605,13 @@ def save_file(file_path, target_folder, username, product_code=None, product_nam
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
         return ""
 
+
 def update_sop_field(cursor, product_code, field_name, display_name):
     cursor.execute(
         f"UPDATE sop_information SET {field_name}=?, created_at=? WHERE product_code=?",
-        (display_name, datetime.now().strftime("%Y%m%dT%H%M%S"), product_code)
+        (display_name, datetime.now().strftime("%Y%m%dT%H%M%S"), product_code),
     )
+
 
 def handle_sop_update(product_code, product_name, sop_path, field_name, entry_widget, current_user):
     path = entry_widget.get().strip()
@@ -624,11 +642,21 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
     log_activity(user=current_user, action="update_sop", filename=display_name, module="SOP資訊")
     return display_name
 
+
 def create_sop_update_button(
-    frame, row, label, sop_path, field_name,
-    product_code_entry, product_name_entry, entry_widget,
-    current_user, user_specialty, role, allowed_specialty,
-    on_refresh=None
+    frame,
+    row,
+    label,
+    sop_path,
+    field_name,
+    product_code_entry,
+    product_name_entry,
+    entry_widget,
+    current_user,
+    user_specialty,
+    role,
+    allowed_specialty,
+    on_refresh=None,
 ):
     def update_action():
         if role != "admin" and user_specialty != allowed_specialty:
@@ -647,18 +675,27 @@ def create_sop_update_button(
             try:
                 if callable(on_refresh):
                     on_refresh()
-            except:
+            except Exception:
                 pass
 
     btn = tk.Button(frame, text="更新", command=update_action)
     btn.grid(row=row, column=3, padx=5)
     return btn
 
+
 def create_upload_field_with_update(
-    row, label, folder, field_name,
-    form, product_code_entry, product_name_entry,
-    current_user, user_specialty, role, allowed_specialty,
-    on_refresh=None
+    row,
+    label,
+    folder,
+    field_name,
+    form,
+    product_code_entry,
+    product_name_entry,
+    current_user,
+    user_specialty,
+    role,
+    allowed_specialty,
+    on_refresh=None,
 ):
     tk.Label(form, text=label).grid(row=row, column=0, sticky="e")
     entry = tk.Entry(form, width=50)
@@ -673,18 +710,29 @@ def create_upload_field_with_update(
     tk.Button(form, text="選擇檔案", command=browse).grid(row=row, column=2)
 
     create_sop_update_button(
-        form, row, label, folder, field_name,
-        product_code_entry, product_name_entry, entry,
-        current_user, user_specialty, role, allowed_specialty,
-        on_refresh=on_refresh
+        form,
+        row,
+        label,
+        folder,
+        field_name,
+        product_code_entry,
+        product_name_entry,
+        entry,
+        current_user,
+        user_specialty,
+        role,
+        allowed_specialty,
+        on_refresh=on_refresh,
     )
     return entry
 
+
 def create_main_interface(root, db_name, login_info):
-    current_user = login_info['user']
-    current_role = login_info['role']
-    can_add = login_info['can_add']
-    can_delete = login_info['can_delete']
+    current_user = login_info["user"]
+    current_role = login_info["role"]
+    can_add = login_info["can_add"]
+    can_view_fixture = int(login_info.get("can_view_fixture", 0) or 0)
+    can_view_fixture_logs = int(login_info.get("can_view_fixture_logs", 0) or 0)
 
     notebook = ttk.Notebook(root)
     notebook.pack(fill="both", expand=True)
@@ -693,14 +741,14 @@ def create_main_interface(root, db_name, login_info):
         "SOP資訊": tk.Frame(notebook),
         "SOP生成": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "SOP紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None,
-        "治具管理": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
-        "治具紀錄": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
-        "測試BOM": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
+        "治具管理": tk.Frame(notebook) if can_view_fixture else None,
+        "治具紀錄": tk.Frame(notebook) if can_view_fixture_logs else None,
+        "測試BOM": tk.Frame(notebook) if can_view_fixture else None,
         "治具申請": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "治具損耗": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "異常平台": tk.Frame(notebook) if current_role in ("admin", "engineer") else None,
         "帳號管理": tk.Frame(notebook) if current_role == "admin" else None,
-        "改版歷程": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None
+        "改版歷程": tk.Frame(notebook) if current_role in ("admin", "engineer", "leader") else None,
     }
 
     for name, frame in tabs.items():
@@ -718,17 +766,16 @@ def create_main_interface(root, db_name, login_info):
 
     def refresh_fixture_logs():
         if tabs.get("治具紀錄"):
-            build_fixture_logs_tab(tabs["治具紀錄"], refresh_only=True, current_user=current_user)
+            build_fixture_logs_tab(tabs["治具紀錄"], refresh_only=True, current_user=login_info)
 
-    if current_role in ("admin", "engineer"):
-        if tabs.get("治具紀錄"):
-            build_fixture_logs_tab(tabs["治具紀錄"], current_user=current_user)
+    if tabs.get("治具紀錄"):
+        build_fixture_logs_tab(tabs["治具紀錄"], current_user=login_info)
 
-        if tabs.get("治具管理"):
-            build_fixture_tab(tabs["治具管理"], current_user, on_change=refresh_fixture_logs)
+    if tabs.get("治具管理"):
+        build_fixture_tab(tabs["治具管理"], login_info, on_change=refresh_fixture_logs)
 
-        if tabs.get("測試BOM"):
-            build_fixture_bom_tab(tabs["測試BOM"], current_user)
+    if tabs.get("測試BOM"):
+        build_fixture_bom_tab(tabs["測試BOM"], login_info)
 
     if current_role == "admin" and tabs.get("帳號管理"):
         build_user_management_tab(tabs["帳號管理"], db_name, login_info)
@@ -754,33 +801,78 @@ def create_main_interface(root, db_name, login_info):
         entry_name.grid(row=1, column=1)
 
         entry_dip = create_upload_field_with_update(
-            2, "DIP SOP", DIP_SOP_PATH, "dip_sop", form, entry_code, entry_name,
-            current_user, login_info['specialty'], current_role, "dip",
-            on_refresh=lambda: query_data()
+            2,
+            "DIP SOP",
+            DIP_SOP_PATH,
+            "dip_sop",
+            form,
+            entry_code,
+            entry_name,
+            current_user,
+            login_info["specialty"],
+            current_role,
+            "dip",
+            on_refresh=lambda: query_data(),
         )
 
         entry_assembly = create_upload_field_with_update(
-            3, "組裝SOP", ASSEMBLY_SOP_PATH, "assembly_sop", form, entry_code, entry_name,
-            current_user, login_info['specialty'], current_role, "assembly",
-            on_refresh=lambda: query_data()
+            3,
+            "組裝SOP",
+            ASSEMBLY_SOP_PATH,
+            "assembly_sop",
+            form,
+            entry_code,
+            entry_name,
+            current_user,
+            login_info["specialty"],
+            current_role,
+            "assembly",
+            on_refresh=lambda: query_data(),
         )
 
         entry_test = create_upload_field_with_update(
-            4, "測試SOP", TEST_SOP_PATH, "test_sop", form, entry_code, entry_name,
-            current_user, login_info['specialty'], current_role, "test",
-            on_refresh=lambda: query_data()
+            4,
+            "測試SOP",
+            TEST_SOP_PATH,
+            "test_sop",
+            form,
+            entry_code,
+            entry_name,
+            current_user,
+            login_info["specialty"],
+            current_role,
+            "test",
+            on_refresh=lambda: query_data(),
         )
 
         entry_packaging = create_upload_field_with_update(
-            5, "包裝SOP", PACKAGING_SOP_PATH, "packaging_sop", form, entry_code, entry_name,
-            current_user, login_info['specialty'], current_role, "packaging",
-            on_refresh=lambda: query_data()
+            5,
+            "包裝SOP",
+            PACKAGING_SOP_PATH,
+            "packaging_sop",
+            form,
+            entry_code,
+            entry_name,
+            current_user,
+            login_info["specialty"],
+            current_role,
+            "packaging",
+            on_refresh=lambda: query_data(),
         )
 
         entry_oqc = create_upload_field_with_update(
-            6, "檢查表OQC", OQC_PATH, "oqc_checklist", form, entry_code, entry_name,
-            current_user, login_info['specialty'], current_role, "oqc",
-            on_refresh=lambda: query_data()
+            6,
+            "檢查表OQC",
+            OQC_PATH,
+            "oqc_checklist",
+            form,
+            entry_code,
+            entry_name,
+            current_user,
+            login_info["specialty"],
+            current_role,
+            "oqc",
+            on_refresh=lambda: query_data(),
         )
 
         def save_data():
@@ -806,29 +898,35 @@ def create_main_interface(root, db_name, login_info):
                 p_file, p_time = save_file_if_exist(entry_packaging.get().strip(), PACKAGING_SOP_PATH, current_user, code, name, "packaging_sop")
                 o_file, o_time = save_file_if_exist(entry_oqc.get().strip(), OQC_PATH, current_user, code, name, "oqc_checklist")
 
-                if d_file: log_activity(user=current_user, action="upload", filename=d_file, module="SOP資訊")
-                if a_file: log_activity(user=current_user, action="upload", filename=a_file, module="SOP資訊")
-                if t_file: log_activity(user=current_user, action="upload", filename=t_file, module="SOP資訊")
-                if p_file: log_activity(user=current_user, action="upload", filename=p_file, module="SOP資訊")
-                if o_file: log_activity(user=current_user, action="upload", filename=o_file, module="SOP資訊")
+                if d_file:
+                    log_activity(user=current_user, action="upload", filename=d_file, module="SOP資訊")
+                if a_file:
+                    log_activity(user=current_user, action="upload", filename=a_file, module="SOP資訊")
+                if t_file:
+                    log_activity(user=current_user, action="upload", filename=t_file, module="SOP資訊")
+                if p_file:
+                    log_activity(user=current_user, action="upload", filename=p_file, module="SOP資訊")
+                if o_file:
+                    log_activity(user=current_user, action="upload", filename=o_file, module="SOP資訊")
 
-                cursor.execute("""
-                    INSERT INTO sop_information (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    code, name, d_file, a_file, t_file, p_file, o_file,
-                    current_user, datetime.now().strftime("%Y%m%dT%H%M%S")
-                ))
+                cursor.execute(
+                    (
+                        "INSERT INTO sop_information "
+                        "(product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    ),
+                    (code, name, d_file, a_file, t_file, p_file, o_file, current_user, datetime.now().strftime("%Y%m%dT%H%M%S")),
+                )
                 conn.commit()
 
             messagebox.showinfo("成功", "已新增紀錄")
-            for e in [entry_code, entry_name, entry_dip, entry_assembly, entry_test, entry_packaging, entry_oqc]:
+            for e in (entry_code, entry_name, entry_dip, entry_assembly, entry_test, entry_packaging, entry_oqc):
                 e.delete(0, tk.END)
             query_data()
 
-        if current_role != "leader":
-            tk.Button(form, text="新增紀錄", command=save_data, bg="lightblue",
-                      state="normal" if can_add else "disabled").grid(row=7, column=1, pady=10)
+        tk.Button(form, text="新增紀錄", command=save_data, bg="lightblue", state="normal" if can_add else "disabled").grid(
+            row=7, column=1, pady=10
+        )
 
     query_frame = tk.Frame(sop_frame)
     query_frame.pack(fill="x", padx=10, pady=5)
@@ -838,6 +936,7 @@ def create_main_interface(root, db_name, login_info):
     entry_query.pack(side="left")
 
     sort_desc = tk.BooleanVar(value=True)
+
     def toggle_sort():
         sort_desc.set(not sort_desc.get())
         query_data()
@@ -866,20 +965,19 @@ def create_main_interface(root, db_name, login_info):
     sop_stats_label.pack(fill="x", padx=10, pady=(0, 5))
 
     def update_sop_statistics():
-        stats = {
-            "DIP SOP": 0,
-            "組裝 SOP": 0,
-            "測試 SOP": 0,
-            "包裝 SOP": 0,
-            "檢查表 OQC": 0
-        }
+        stats = {"DIP SOP": 0, "組裝 SOP": 0, "測試 SOP": 0, "包裝 SOP": 0, "檢查表 OQC": 0}
         for row_id in tree.get_children():
             values = tree.item(row_id)["values"]
-            if values[2]: stats["DIP SOP"] += 1
-            if values[3]: stats["組裝 SOP"] += 1
-            if values[4]: stats["測試 SOP"] += 1
-            if values[5]: stats["包裝 SOP"] += 1
-            if values[6]: stats["檢查表 OQC"] += 1
+            if values[2]:
+                stats["DIP SOP"] += 1
+            if values[3]:
+                stats["組裝 SOP"] += 1
+            if values[4]:
+                stats["測試 SOP"] += 1
+            if values[5]:
+                stats["包裝 SOP"] += 1
+            if values[6]:
+                stats["檢查表 OQC"] += 1
         sop_stats_var.set("　｜　".join([f"{k}: {v}" for k, v in stats.items()]))
 
     def query_data():
@@ -891,10 +989,10 @@ def create_main_interface(root, db_name, login_info):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            base_query = """
-                SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at
-                FROM sop_information
-            """
+            base_query = (
+                "SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at "
+                "FROM sop_information"
+            )
             conditions = []
             params = []
 
@@ -927,7 +1025,7 @@ def create_main_interface(root, db_name, login_info):
                 "assembly_sop_bypass",
                 "test_sop_bypass",
                 "packaging_sop_bypass",
-                "oqc_checklist_bypass"
+                "oqc_checklist_bypass",
             ]
 
             for row in rows:
@@ -940,10 +1038,7 @@ def create_main_interface(root, db_name, login_info):
                     sop_file = row_display[i]
                     if sop_file:
                         display_name = f"{product_code}_{product_name}_{timestamp}"
-                        cursor.execute(
-                            f"SELECT {bypass_fields[i - 2]} FROM sop_information WHERE product_code=?",
-                            (product_code,)
-                        )
+                        cursor.execute(f"SELECT {bypass_fields[i - 2]} FROM sop_information WHERE product_code=?", (product_code,))
                         bypass = cursor.fetchone()
                         if bypass and bypass[0]:
                             row_display[i] = f"（已停用） {display_name}"
@@ -953,7 +1048,7 @@ def create_main_interface(root, db_name, login_info):
                         row_display[i] = ""
 
                 row_display[0] = product_code
-                tree.insert('', tk.END, values=row_display)
+                tree.insert("", tk.END, values=row_display)
 
         update_sop_statistics()
 
@@ -964,17 +1059,11 @@ def create_main_interface(root, db_name, login_info):
             return
         col_index = int(col[1:]) - 1
         if col_index in range(2, 7):
-            values = tree.item(item)['values']
+            values = tree.item(item)["values"]
             product_code = values[0]
             if "（已停用）" in str(values[col_index]):
                 return
-            field_map = {
-                2: "dip_sop",
-                3: "assembly_sop",
-                4: "test_sop",
-                5: "packaging_sop",
-                6: "oqc_checklist"
-            }
+            field_map = {2: "dip_sop", 3: "assembly_sop", 4: "test_sop", 5: "packaging_sop", 6: "oqc_checklist"}
             target_field = field_map.get(col_index)
             if not target_field:
                 return
@@ -1056,21 +1145,19 @@ def create_main_interface(root, db_name, login_info):
         if col_index not in range(2, 7):
             return
 
-        product_code = tree.item(item)['values'][0]
+        product_code = tree.item(item)["values"][0]
         sop_key = list(SOP_FIELDS.keys())[col_index - 2]
         field_name = SOP_FIELDS[sop_key][1]
         bypass_field = SOP_FIELDS[sop_key][2]
 
         menu = tk.Menu(tree, tearoff=0)
-        menu.add_command(
-            label="啟用/停用",
-            command=lambda: toggle_bypass(product_code, field_name, bypass_field)
-        )
+        menu.add_command(label="啟用/停用", command=lambda: toggle_bypass(product_code, field_name, bypass_field))
         menu.post(event.x_root, event.y_root)
 
     tree.bind("<Button-3>", on_right_click)
 
     if current_role == "admin":
+
         def delete_selected():
             selected_items = tree.selection()
             if not selected_items:
@@ -1081,7 +1168,7 @@ def create_main_interface(root, db_name, login_info):
                 with get_conn() as conn:
                     cursor = conn.cursor()
                     for item in selected_items:
-                        product_code = str(tree.item(item)['values'][0]).zfill(8)
+                        product_code = str(tree.item(item)["values"][0]).zfill(8)
                         cursor.execute("DELETE FROM sop_information WHERE product_code=?", (product_code,))
                         deleted_codes.append(product_code)
                     conn.commit()
@@ -1091,10 +1178,10 @@ def create_main_interface(root, db_name, login_info):
 
         delete_frame = tk.Frame(sop_frame)
         delete_frame.pack(fill="x", padx=10, pady=(0, 5), anchor="e")
-        tk.Button(delete_frame, text="刪除選取資料", command=delete_selected,
-                  bg="lightcoral", fg="white").pack(side="right")
+        tk.Button(delete_frame, text="刪除選取資料", command=delete_selected, bg="lightcoral", fg="white").pack(side="right")
 
     query_data()
+
 
 def open_password_change_window(parent, db_name, username):
     win = tk.Toplevel(parent)
@@ -1103,7 +1190,7 @@ def open_password_change_window(parent, db_name, username):
     win.resizable(False, False)
     try:
         win.iconbitmap("PMS.ico")
-    except:
+    except Exception:
         pass
 
     tk.Label(win, text="舊密碼：").pack(pady=(10, 0))
@@ -1130,8 +1217,8 @@ def open_password_change_window(parent, db_name, username):
             messagebox.showerror("錯誤", "新密碼與確認密碼不一致")
             return
 
-        old_hash = hashlib.sha256(old_pw.encode()).hexdigest()
-        new_hash = hashlib.sha256(new_pw.encode()).hexdigest()
+        old_hash = hashlib.sha256(old_pw.encode("utf-8")).hexdigest()
+        new_hash = hashlib.sha256(new_pw.encode("utf-8")).hexdigest()
 
         with get_conn() as conn:
             cursor = conn.cursor()
@@ -1147,7 +1234,12 @@ def open_password_change_window(parent, db_name, username):
 
     tk.Button(win, text="變更密碼", bg="lightgreen", command=confirm_change).pack(pady=15)
 
+
 if __name__ == "__main__":
+    apply_db_path()
+    print(f"使用資料庫：{DB_NAME}")
+    set_db_path(DB_NAME)
+
     if is_another_instance_running():
         messagebox.showerror("錯誤", "本程式已在執行中，請勿重複開啟。")
         sys.exit()
@@ -1182,42 +1274,18 @@ if __name__ == "__main__":
         root.title("生產管理平台")
         root.geometry("1600x900")
 
-        WARNING_TIMEOUT_MS = (IDLE_TIMEOUT - 60) * 1000
-        IDLE_TIMEOUT_MS = IDLE_TIMEOUT * 1000
-
-        def reset_idle_timer(event=None):
-            if not ENABLE_AUTO_LOGOUT:
-                return
-            if hasattr(root, "_idle_after_id"):
-                root.after_cancel(root._idle_after_id)
-            if hasattr(root, "_warning_after_id"):
-                root.after_cancel(root._warning_after_id)
-            root._warning_after_id = root.after(WARNING_TIMEOUT_MS, on_idle_warning)
-            root._idle_after_id = root.after(IDLE_TIMEOUT_MS, on_idle_timeout)
-
-        def on_idle_warning():
+        def idle_logout_callback():
             try:
-                messagebox.showwarning("閒置警告", f"您已閒置 {IDLE_TIMEOUT-60} 秒，若再 60 秒未操作將自動登出。")
-            except:
+                log_activity(user=login_info["user"], action="logout", filename="auto_logout", module="系統")
+            except Exception:
                 pass
+            logout_and_exit(root)
 
-        def on_idle_timeout():
-            try:
-                toplevel = tk.Toplevel(root)
-                toplevel.title("自動登出")
-                tk.Label(toplevel, text=f"您已閒置超過 {IDLE_TIMEOUT//60} 分鐘，系統將自動登出").pack(padx=20, pady=20)
-                toplevel.after(2000, lambda: logout_and_exit(root))
-            except:
-                logout_and_exit(root)
-
-        if ENABLE_AUTO_LOGOUT:
-            for event_type in ["<Motion>", "<Key>", "<Button>"]:
-                root.bind_all(event_type, reset_idle_timer)
-            reset_idle_timer()
+        attach_idle_logout(root=root, enabled=ENABLE_AUTO_LOGOUT, idle_timeout_seconds=IDLE_TIMEOUT, logout_callback=idle_logout_callback)
 
         try:
             root.iconbitmap("PMS.ico")
-        except:
+        except Exception:
             pass
 
         default_font = tkFont.nametofont("TkDefaultFont")
@@ -1231,8 +1299,10 @@ if __name__ == "__main__":
 
         if current_role in ("admin", "engineer"):
             change_pw_btn = tk.Button(
-                top_bar, text="變更密碼", bg="lightgreen",
-                command=lambda: open_password_change_window(root, DB_NAME, login_info["user"])
+                top_bar,
+                text="變更密碼",
+                bg="lightgreen",
+                command=lambda: open_password_change_window(root, DB_NAME, login_info["user"]),
             )
             change_pw_btn.pack(side="right", padx=10, pady=(0, 0))
 

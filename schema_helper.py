@@ -186,22 +186,23 @@ def add_col_if_missing(conn, table: str, col: str, col_type: str):
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
     cur.close()
 
-def ensure_fixture_adjustment_schema(db_path, verbose=False):
-    import sqlite3
+def ensure_fixture_adjustment_schema(db_path=None, verbose=False):
+    if not db_path:
+        raise ValueError("db_path is required")
 
-    create_sql = (
-        "CREATE TABLE IF NOT EXISTS fixture_adjustment_logs ("
-        "adjustment_log_id INTEGER PRIMARY KEY AUTOINCREMENT,"
-        "adjustment_log_part_no TEXT NOT NULL,"
-        "adjustment_log_warehouse TEXT NOT NULL,"
-        "adjustment_log_before_qty INTEGER NOT NULL,"
-        "adjustment_log_after_qty INTEGER NOT NULL,"
-        "adjustment_log_delta_qty INTEGER NOT NULL,"
-        "adjustment_log_reason TEXT,"
-        "adjustment_log_user TEXT NOT NULL,"
-        "adjustment_log_timestamp TEXT NOT NULL"
-        ")"
+    create_sql = """
+    CREATE TABLE IF NOT EXISTS fixture_adjustment_logs (
+        adjustment_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        adjustment_log_part_no TEXT NOT NULL,
+        adjustment_log_warehouse TEXT NOT NULL,
+        adjustment_log_before_qty INTEGER NOT NULL,
+        adjustment_log_after_qty INTEGER NOT NULL,
+        adjustment_log_delta_qty INTEGER NOT NULL,
+        adjustment_log_reason TEXT,
+        adjustment_log_user TEXT NOT NULL,
+        adjustment_log_timestamp TEXT NOT NULL
     )
+    """
 
     required_cols = {
         "adjustment_log_id": "INTEGER",
@@ -215,19 +216,14 @@ def ensure_fixture_adjustment_schema(db_path, verbose=False):
         "adjustment_log_timestamp": "TEXT",
     }
 
-    with sqlite3.connect(db_path) as conn:
+    with get_conn(db_path) as conn:
         cur = conn.cursor()
-
         cur.execute(create_sql)
-
         cur.execute("PRAGMA table_info(fixture_adjustment_logs)")
         existing = {row[1] for row in cur.fetchall()}
-
         for col_name, col_type in required_cols.items():
-            if col_name in existing:
-                continue
-            cur.execute(f"ALTER TABLE fixture_adjustment_logs ADD COLUMN {col_name} {col_type}")
-
+            if col_name not in existing:
+                cur.execute(f"ALTER TABLE fixture_adjustment_logs ADD COLUMN {col_name} {col_type}")
         conn.commit()
 
     if verbose:

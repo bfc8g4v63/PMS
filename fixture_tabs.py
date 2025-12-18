@@ -1,3 +1,6 @@
+#$ fixture_tabs.py
+#% 治具管理GUI
+
 import tkinter as tk
 import openpyxl
 from tkinter import ttk, messagebox, filedialog

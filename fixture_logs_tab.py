@@ -26,11 +26,17 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
 
     username = _normalize_username(current_user)
 
-    def _get_user_permissions(user_name: str):
+    def _get_user_permissions(user_name: str, ctx):
         flags = {
             "can_view_fixture_logs": 0,
             "can_delete_fixture_logs": 0
         }
+
+        if isinstance(ctx, dict):
+            flags["can_view_fixture_logs"] = int(ctx.get("can_view_fixture_logs", 0) or 0)
+            flags["can_delete_fixture_logs"] = int(ctx.get("can_delete_fixture_logs", 0) or 0)
+            return flags
+
         if not user_name:
             return flags
 
@@ -50,7 +56,7 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
             flags["can_delete_fixture_logs"] = int(row[1] or 0)
             return flags
 
-    perms = _get_user_permissions(username)
+    perms = _get_user_permissions(username, current_user)
 
     if int(perms.get("can_view_fixture_logs") or 0) != 1:
         holder = ttk.Frame(frame)
@@ -105,6 +111,7 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
         "來源倉",
         "目標倉",
         "治具操作人",
+        "調帳原因",
         "時間"
     )
 
@@ -123,6 +130,8 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
             tree.column(col, width=100, anchor="center")
         elif col == "治具操作人":
             tree.column(col, width=100, anchor="center")
+        elif col == "調帳原因":
+            tree.column(col, width=120, anchor="center")
         elif col == "時間":
             tree.column(col, width=150, anchor="center")
         elif col == "單號":
@@ -131,6 +140,25 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
             tree.column(col, width=100, anchor="center")
 
     tree.pack(fill="both", expand=True, padx=5, pady=5)
+
+    def _parse_ymd(text: str):
+        s = (text or "").strip()
+        if not s:
+            return None
+        try:
+            return datetime.strptime(s, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("日期格式需為 YYYY-MM-DD")
+
+    def _align_row_values(row, col_count: int):
+        r = list(row) if row is not None else []
+        if len(r) == 10 and col_count == 11:
+            r = r[:9] + [""] + r[9:]
+        if len(r) < col_count:
+            r = r + ([""] * (col_count - len(r)))
+        if len(r) > col_count:
+            r = r[:col_count]
+        return [("" if v is None else str(v)) for v in r]
 
     def on_query():
         try:
@@ -141,10 +169,10 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
             end_ts = None
 
             if start_text:
-                dt = datetime.strptime(start_text, "%Y-%m-%d")
+                dt = _parse_ymd(start_text)
                 start_ts = dt.strftime("%Y%m%dT000000")
             if end_text:
-                dt = datetime.strptime(end_text, "%Y-%m-%d")
+                dt = _parse_ymd(end_text)
                 end_ts = dt.strftime("%Y%m%dT235959")
 
             action_filter = action_var.get().strip() or None
@@ -162,7 +190,7 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
                 tree.delete(row)
 
             for r in logs:
-                safe_values = [("" if v is None else str(v)) for v in r]
+                safe_values = _align_row_values(r, len(columns))
                 tree.insert("", "end", text="", values=safe_values)
 
             if logs:
@@ -184,13 +212,29 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
         if not messagebox.askyesno("確認", "確定要刪除所選紀錄？"):
             return
         try:
-            ids = [tree.item(i, "values")[0] for i in sel]
+            ids = []
+            for i in sel:
+                row_vals = tree.item(i, "values")
+                if not row_vals:
+                    continue
+                log_id = row_vals[0]
+                if log_id is None:
+                    continue
+                log_id = str(log_id).strip()
+                if not log_id:
+                    continue
+                ids.append(log_id)
+
+            if not ids:
+                messagebox.showwarning("提醒", "所選資料沒有有效單號，無法刪除")
+                return
+
             delete_fixture_logs(ids, deleted_by=username, note="GUI delete selected")
             on_query()
             messagebox.showinfo("完成", "所選紀錄已刪除")
         except Exception as e:
             messagebox.showerror("錯誤", str(e))
-
+            
     def on_delete_all():
         if int(perms.get("can_delete_fixture_logs") or 0) != 1:
             messagebox.showerror("錯誤", "無刪除治具紀錄權限")
