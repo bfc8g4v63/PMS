@@ -1275,10 +1275,10 @@ if __name__ == "__main__":
         root.geometry("1600x900")
 
         def idle_logout_callback():
-            try:
-                log_activity(user=login_info["user"], action="logout", filename="auto_logout", module="系統")
-            except Exception:
-                pass
+            #try:
+            #    log_activity(user=login_info["user"], action="logout", filename="auto_logout", module="系統")
+            #except Exception:
+            #    pass
             logout_and_exit(root)
 
         attach_idle_logout(root=root, enabled=ENABLE_AUTO_LOGOUT, idle_timeout_seconds=IDLE_TIMEOUT, logout_callback=idle_logout_callback)
