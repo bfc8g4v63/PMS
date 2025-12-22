@@ -2,26 +2,29 @@
 #% SQLite 連線管理，統一由此進入，不再呼叫 fixture_helper
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 
 DB_PATH = None
 _PRAGMA_INIT_DONE = set()
+_PRAGMA_LOCK = threading.Lock()
 _CHECKPOINT_MODES = {"PASSIVE", "FULL", "RESTART", "TRUNCATE"}
-
 
 def set_db_path(path: str):
     global DB_PATH
     DB_PATH = path
 
-
 def _ensure_pragmas(conn: sqlite3.Connection, target: str):
-    if target not in _PRAGMA_INIT_DONE:
+    with _PRAGMA_LOCK:
+        first_time = target not in _PRAGMA_INIT_DONE
+        if first_time:
+            _PRAGMA_INIT_DONE.add(target)
+
+    if first_time:
         conn.execute("PRAGMA journal_mode=WAL;")
         conn.execute("PRAGMA synchronous=NORMAL;")
-        _PRAGMA_INIT_DONE.add(target)
     conn.execute("PRAGMA foreign_keys=ON;")
     conn.execute("PRAGMA busy_timeout=5000;")
-
 
 def get_conn(path: str = None):
     target = path or DB_PATH
@@ -31,15 +34,16 @@ def get_conn(path: str = None):
     _ensure_pragmas(conn, target)
     return conn
 
-
 @contextmanager
 def conn_ctx(path: str = None):
     conn = get_conn(path)
     try:
         yield conn
     finally:
-        conn.close()
-
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 @contextmanager
 def tx(path: str = None, begin_mode: str = "IMMEDIATE"):
@@ -51,24 +55,27 @@ def tx(path: str = None, begin_mode: str = "IMMEDIATE"):
         conn.execute(f"BEGIN {bm};")
         yield conn
         conn.commit()
-    except:
-        conn.rollback()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         raise
     finally:
-        conn.close()
-
+        try:
+            conn.close()
+        except Exception:
+            pass
 
 def db_execute(sql: str, params: tuple = ()):
     with tx() as conn:
         cur = conn.cursor()
         cur.execute(sql, params)
 
-
 def db_executemany(sql: str, seq):
     with tx() as conn:
         cur = conn.cursor()
         cur.executemany(sql, seq)
-
 
 def db_query_all(sql: str, params: tuple = ()):
     with conn_ctx() as conn:
@@ -76,13 +83,11 @@ def db_query_all(sql: str, params: tuple = ()):
         cur.execute(sql, params)
         return cur.fetchall()
 
-
 def db_query_one(sql: str, params: tuple = ()):
     with conn_ctx() as conn:
         cur = conn.cursor()
         cur.execute(sql, params)
         return cur.fetchone()
-
 
 def safe_checkpoint(mode: str = "PASSIVE"):
     m = (mode or "PASSIVE").strip().upper()

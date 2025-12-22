@@ -2,7 +2,7 @@
 
 ---
 
-## 更新重點（截至 2025-12-16）
+## 更新重點（截至 2025-12-22）
 
 * **SOP 模組**
   * [x] SOP 資訊
@@ -78,12 +78,12 @@
         * [x] 可見治具紀錄
         * [x] 刪除治具紀錄
       * [x] 修改帳密
-          * [x] 帳號
-          * [x] 密碼
-          * [x] 角色
-          * [x] 專長
-          * [x] 刪除帳號
-          * [x] 密碼修改（admin、engineer）
+        * [x] 帳號
+        * [x] 密碼
+        * [x] 角色
+        * [x] 專長
+        * [x] 刪除帳號
+        * [x] 密碼修改（admin、engineer）
 
 * **登入與使用者管理**
   * [x] 登入顯示使用者名稱
@@ -91,14 +91,14 @@
   * [x] 一機一開機制
   * [x] Idle Timeout 閒置自動登出
   * [x] Enter Key 雙重觸發問題修正
-  * [x]  登出、Idle Timeout 皆確保狀態回寫
+  * [x] 登出、Idle Timeout 皆確保狀態回寫
   * [x] 多視窗重複啟動防呆（同帳號）
 
 * **治具 BOM**
-   * [x] BOM 資料表初始化納入 ensure_schema 流程
-   * [x] BOM 主子料不可相同檢查
-   * [x] BOM 刪除僅影響 BOM，不影響治具本體
-   * [ ] Backlog：BOM 與庫存連動試算
+  * [x] BOM 資料表初始化納入 ensure_schema 流程
+  * [x] BOM 主子料不可相同檢查
+  * [x] BOM 刪除僅影響 BOM，不影響治具本體
+  * [ ] Backlog：BOM 與庫存連動試算
 
 * **資料庫與穩定性**
   * [x] SQLite WAL 模式啟用
@@ -220,6 +220,7 @@
   * [x] 移除未使用欄位與變數（避免誤判為死碼）
   * [x] 所有路徑存取集中處理，避免散落硬編碼
   * [x] 日誌與操作紀錄欄位命名全面前綴化（避免歧義）
+
 ---
 
 ## 資料庫層（inspect .177, 2025-12-16）
@@ -271,12 +272,114 @@
   * **warehouse_stock**
     * part_no (TEXT), warehouse (TEXT), usable_qty (INTEGER), safety_stock (INTEGER)
 
+---
+
+## Backlog（流程與權限治理）
+
+* [ ] 治具申請（起單）
+  * [ ] 申請來源：倉別使用者（上齊 / 代工廠 / 工程）
+  * [ ] 起單僅能選擇「可視倉別」內的治具
+  * [ ] 起單內容
+    * [ ] 治具料號
+    * [ ] 申請數量
+    * [ ] 使用用途
+    * [ ] 預計使用期間
+    * [ ] 備註
+  * [ ] 起單不直接異動庫存
+  * [ ] 起單即寫入申請紀錄（request_logs）
+
+* [ ] 治具申請審核
+  * [ ] 審核角色：虹堡治具管理人
+  * [ ] 可於審核階段調整數量 / 倉別 / 備註
+  * [ ] 審核結果
+    * [ ] 核准
+    * [ ] 駁回
+    * [ ] 逾時自動失效（48 小時）
+  * [ ] 審核完成才觸發實際調撥流程
+  * [ ] 審核動作寫入審核紀錄（approve_logs）
+
+* [ ] 借出單流程
+  * [ ] 核准後自動生成借出單號
+  * [ ] 借出單內容
+    * [ ] 來源倉
+    * [ ] 目的倉
+    * [ ] 借出數量
+    * [ ] 借出人
+    * [ ] 核准人
+    * [ ] 借出時間
+  * [ ] 借出單生成後才實際扣庫
+  * [ ] 借出單與調撥紀錄一對一關聯
+
+* [ ] 借出歸還流程
+  * [ ] 歸還必須對應既有借出單
+  * [ ] 歸還數量不得超過借出數量
+  * [ ] 歸還可分批
+  * [ ] 歸還完成才回補庫存
+  * [ ] 歸還紀錄與借出單關聯保存
+
+* [ ] 治具損耗 / 報廢
+  * [ ] 僅限虹堡工程 / 管理角色
+  * [ ] 必須指定來源借出單或來源倉
+  * [ ] 必填損耗原因
+  * [ ] 損耗不回滾、不自動補庫
+  * [ ] 損耗紀錄獨立於調撥紀錄
+
+---
+
+## 權限模型（規劃）
+
+* [ ] 公司別 / 倉別識別
+  * [ ] 使用者綁定 company_code
+  * [ ] 使用者綁定 warehouse_scope（可見倉清單）
+  * [ ] 虹堡母公司角色可視所有倉
+  * [ ] 代工廠僅可視自身倉
+
+* [ ] 功能權限分離
+  * [ ] 可起單
+  * [ ] 可審核
+  * [ ] 可調撥
+  * [ ] 可刪除紀錄
+  * [ ] 可見全倉總覽
+
+* [ ] UI 層權限過濾
+  * [ ] Notebook 分頁依權限動態生成
+  * [ ] TreeView 僅顯示可視倉資料
+  * [ ] 不可見倉別不建立 UI 元件
+
+---
+
+## 資料庫擴充（規劃）
 * **Upcoming Features**
-* [x] 測試BOM (schema-fixture_boms)
-  * [ ] bom_model_name
-    * [ ] part_no (TEXT)
-    * [ ] part_name (TEXT)
-    * [ ] part_spec (TEXT)
-    * [ ] part_group (TEXT)
+* [x] product_BOM
+  * [x] bom_id
+    * [x] part_no (TEXT)
+    * [x] part_name (TEXT)
+    * [x] part_spec (TEXT)
+    * [x] part_group (TEXT)
     * [ ] environment_bom_qty
     * [ ] environment_bom_created_at (TEXT)
+* [ ] request_logs
+  * [ ] request_id
+  * [ ] part_no
+  * [ ] request_qty
+  * [ ] request_warehouse
+  * [ ] request_user
+  * [ ] request_status
+  * [ ] request_created_at
+
+* [ ] approve_logs
+  * [ ] approve_id
+  * [ ] request_id
+  * [ ] approve_user
+  * [ ] approve_action
+  * [ ] approve_timestamp
+
+* [ ] loan_logs
+  * [ ] loan_id
+  * [ ] part_no
+  * [ ] loan_qty
+  * [ ] from_warehouse
+  * [ ] to_unit
+  * [ ] loan_user
+  * [ ] approve_user
+  * [ ] loan_timestamp

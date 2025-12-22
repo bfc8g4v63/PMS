@@ -38,13 +38,11 @@ from schema_helper import (
     auto_add_missing_columns,
     ensure_changelog_schema,
     ensure_fixture_schema,
-    ensure_fixture_adjustment_schema,
     print_tables_info,
 )
 from fixture_tabs import build_fixture_tab
 from fixture_bom_tab import build_fixture_bom_tab
 from fixture_logs_tab import build_fixture_logs_tab
-
 
 SOP_FIELDS = {
     "dip": ("DIP SOP", "dip_sop", "dip_sop_bypass", r"DIP_SOP"),
@@ -63,7 +61,6 @@ OQC_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查�
 LOG_TABLE = "activity_logs"
 _instance_lock = None
 
-
 def get_login_config_path():
     appdata_dir = os.environ.get("APPDATA")
     if not appdata_dir:
@@ -75,7 +72,6 @@ def get_login_config_path():
         os.makedirs(base_dir, exist_ok=True)
     return os.path.join(base_dir, "login_config.json")
 
-
 def load_saved_credentials():
     config_path = get_login_config_path()
     if not os.path.exists(config_path):
@@ -86,7 +82,6 @@ def load_saved_credentials():
         return {"username": data.get("username", ""), "password": data.get("password", "")}
     except Exception:
         return None
-
 
 def save_credentials(username, password, remember_password):
     config_path = get_login_config_path()
@@ -101,14 +96,12 @@ def save_credentials(username, password, remember_password):
     except Exception:
         pass
 
-
 def is_valid_file(file_path, field_name):
     allowed_extensions = [".pdf"]
     if field_name == "oqc_checklist":
         allowed_extensions.append(".xlsx")
     ext = os.path.splitext(file_path)[1].lower()
     return ext in allowed_extensions
-
 
 def save_file_if_exist(file_path, target_folder, username, product_code, product_name, field_name):
     if not file_path:
@@ -137,7 +130,6 @@ def save_file_if_exist(file_path, target_folder, username, product_code, product
         print(f"檔案儲存失敗: {e}")
         return "", ""
 
-
 def is_another_instance_running():
     global _instance_lock
     try:
@@ -146,7 +138,6 @@ def is_another_instance_running():
         return False
     except OSError:
         return True
-
 
 def init_db(role):
     if not os.path.exists(DB_NAME):
@@ -167,7 +158,6 @@ def init_db(role):
         messagebox.showerror("資料庫錯誤", f"無法開啟資料庫：\n{DB_NAME}\n\n錯誤訊息：{e}")
         sys.exit()
 
-
 def sync_back_to_server():
     if not USE_LOCAL_DB:
         print("[雲端模式] 所有操作直接寫入網路 DB，無需回寫")
@@ -186,7 +176,6 @@ def sync_back_to_server():
         print("已同步本機資料庫回網路磁碟")
     except Exception as e:
         print(f"資料回寫失敗: {e}")
-
 
 def logout_and_exit(root):
     global _instance_lock
@@ -209,10 +198,8 @@ def logout_and_exit(root):
             pass
         os._exit(0)
 
-
 def hash_password(password):
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
-
 
 def ensure_admin_full_permissions(username):
     try:
@@ -243,7 +230,6 @@ def ensure_admin_full_permissions(username):
         set_sql = ", ".join([f"{c}=1" for c in targets])
         cur.execute(f"UPDATE users SET {set_sql} WHERE username=?", (u,))
         conn.commit()
-
 
 def login():
     result = {
@@ -388,7 +374,6 @@ def login():
     login_window.mainloop()
     return result
 
-
 def build_log_view_tab(tab, db_name, role):
     tk.Label(tab, text="SOP紀錄查詢").pack(anchor="w", padx=10, pady=(10, 0))
 
@@ -518,7 +503,6 @@ def build_log_view_tab(tab, db_name, role):
 
     refresh_logs()
 
-
 def initialize_database():
     with get_conn() as conn:
         cursor = conn.cursor()
@@ -587,7 +571,6 @@ def initialize_database():
             pass
     auto_add_missing_columns(DB_NAME, get_required_columns())
 
-
 def save_file(file_path, target_folder, username, product_code=None, product_name=None, log=True):
     if not os.path.exists(file_path):
         return ""
@@ -605,13 +588,11 @@ def save_file(file_path, target_folder, username, product_code=None, product_nam
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
         return ""
 
-
 def update_sop_field(cursor, product_code, field_name, display_name):
     cursor.execute(
         f"UPDATE sop_information SET {field_name}=?, created_at=? WHERE product_code=?",
         (display_name, datetime.now().strftime("%Y%m%dT%H%M%S"), product_code),
     )
-
 
 def handle_sop_update(product_code, product_name, sop_path, field_name, entry_widget, current_user):
     path = entry_widget.get().strip()
@@ -641,7 +622,6 @@ def handle_sop_update(product_code, product_name, sop_path, field_name, entry_wi
         conn.commit()
     log_activity(user=current_user, action="update_sop", filename=display_name, module="SOP資訊")
     return display_name
-
 
 def create_sop_update_button(
     frame,
@@ -681,7 +661,6 @@ def create_sop_update_button(
     btn = tk.Button(frame, text="更新", command=update_action)
     btn.grid(row=row, column=3, padx=5)
     return btn
-
 
 def create_upload_field_with_update(
     row,
@@ -725,7 +704,6 @@ def create_upload_field_with_update(
         on_refresh=on_refresh,
     )
     return entry
-
 
 def create_main_interface(root, db_name, login_info):
     current_user = login_info["user"]
@@ -1182,7 +1160,6 @@ def create_main_interface(root, db_name, login_info):
 
     query_data()
 
-
 def open_password_change_window(parent, db_name, username):
     win = tk.Toplevel(parent)
     win.title("變更密碼")
@@ -1234,7 +1211,6 @@ def open_password_change_window(parent, db_name, username):
 
     tk.Button(win, text="變更密碼", bg="lightgreen", command=confirm_change).pack(pady=15)
 
-
 if __name__ == "__main__":
     apply_db_path()
     print(f"使用資料庫：{DB_NAME}")
@@ -1247,7 +1223,6 @@ if __name__ == "__main__":
     try:
         initialize_database()
         auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=VERBOSE_SCHEMA_CHECK)
-        ensure_fixture_adjustment_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
     except Exception as e:
         messagebox.showerror("資料庫錯誤", f"資料庫結構初始化失敗，請用可寫入權限帳號執行一次更新。\n\n錯誤訊息：{e}")
         sys.exit()
@@ -1263,7 +1238,6 @@ if __name__ == "__main__":
             ensure_changelog_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
             ensure_fixture_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
             ensure_fixture_log_schema()
-            ensure_fixture_adjustment_schema(DB_NAME, verbose=VERBOSE_SCHEMA_CHECK)
             auto_add_missing_columns(DB_NAME, get_required_columns(), verbose=VERBOSE_SCHEMA_CHECK)
             ensure_stock_consistency()
 
@@ -1275,10 +1249,6 @@ if __name__ == "__main__":
         root.geometry("1600x900")
 
         def idle_logout_callback():
-            #try:
-            #    log_activity(user=login_info["user"], action="logout", filename="auto_logout", module="系統")
-            #except Exception:
-            #    pass
             logout_and_exit(root)
 
         attach_idle_logout(root=root, enabled=ENABLE_AUTO_LOGOUT, idle_timeout_seconds=IDLE_TIMEOUT, logout_callback=idle_logout_callback)

@@ -4,7 +4,6 @@
 from datetime import datetime
 import sqlite3
 import time
-import json
 from db_helper import conn_ctx, tx
 
 FIXTURE_ACTION_MAP = {
@@ -15,10 +14,6 @@ FIXTURE_ACTION_MAP = {
     "transfer_stock": ("T", "調撥"),
     "adjust_stock": ("A", "調帳")
 }
-
-AUDIT_ACTION_SOFT_DELETE = "SOFT_DELETE"
-AUDIT_ACTION_PURGE = "PURGE"
-
 
 def ensure_fixture_log_schema():
     with conn_ctx() as conn:
@@ -51,30 +46,13 @@ def ensure_fixture_log_schema():
         if "fixture_log_reason" not in existing_cols:
             cur.execute("ALTER TABLE fixture_logs ADD COLUMN fixture_log_reason TEXT")
 
-        cur.execute(
-            "CREATE TABLE IF NOT EXISTS fixture_log_audits ("
-            "fixture_audit_pk INTEGER PRIMARY KEY AUTOINCREMENT,"
-            "fixture_audit_action TEXT NOT NULL,"
-            "fixture_audit_target TEXT NOT NULL,"
-            "fixture_audit_affected INTEGER NOT NULL,"
-            "fixture_audit_user TEXT,"
-            "fixture_audit_timestamp TEXT NOT NULL,"
-            "fixture_audit_note TEXT"
-            ")"
-        )
-
         cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_logs_ts ON fixture_logs(fixture_log_timestamp)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_logs_part_no ON fixture_logs(fixture_log_part_no)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_logs_user ON fixture_logs(fixture_log_user)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_logs_action ON fixture_logs(fixture_log_action)")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_logs_deleted ON fixture_logs(fixture_log_deleted)")
 
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_audits_ts ON fixture_log_audits(fixture_audit_timestamp)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_audits_action ON fixture_log_audits(fixture_audit_action)")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_fixture_audits_user ON fixture_log_audits(fixture_audit_user)")
-
         conn.commit()
-
 
 def generate_sheet_id(action_code: str, conn=None) -> str:
     prefix, _ = FIXTURE_ACTION_MAP.get(action_code, ("Z", action_code))
@@ -96,7 +74,6 @@ def generate_sheet_id(action_code: str, conn=None) -> str:
     max_seq = row[0] if row else None
     next_seq = (max_seq or 0) + 1
     return f"{like_prefix}{next_seq:04d}"
-
 
 def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", user="", reason="", raise_on_fail: bool = False):
     part_no = "" if part_no is None else str(part_no).strip()
@@ -146,7 +123,6 @@ def log_fixture_activity(part_no, action, change_qty=0, from_wh="", to_wh="", us
         raise last_err
     return None
 
-
 def _normalize_id_list(ids):
     if not ids:
         return []
@@ -158,7 +134,6 @@ def _normalize_id_list(ids):
         if s:
             out.append(s)
     return out
-
 
 def _count_target_fixture_logs(conn, ids=None, include_deleted=False):
     ids = _normalize_id_list(ids)
@@ -185,22 +160,6 @@ def _count_target_fixture_logs(conn, ids=None, include_deleted=False):
         cur.execute("SELECT COUNT(1) FROM fixture_logs WHERE COALESCE(fixture_log_deleted,0)=0")
     row = cur.fetchone()
     return int(row[0] or 0)
-
-
-def _insert_fixture_log_audit(conn, action, target, affected, audit_user="", note=""):
-    audit_user = "" if audit_user is None else str(audit_user).strip()
-    note = "" if note is None else str(note).strip()
-    ts = datetime.now().strftime("%Y%m%dT%H%M%S")
-
-    cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO fixture_log_audits ("
-        "fixture_audit_action, fixture_audit_target, fixture_audit_affected, "
-        "fixture_audit_user, fixture_audit_timestamp, fixture_audit_note"
-        ") VALUES (?,?,?,?,?,?)",
-        (str(action), str(target), int(affected or 0), audit_user, ts, note),
-    )
-
 
 def get_fixture_logs(part_no=None, user=None, action=None, start_ts=None, end_ts=None, limit=200, include_deleted=False):
     query = (
@@ -252,17 +211,13 @@ def get_fixture_logs(part_no=None, user=None, action=None, start_ts=None, end_ts
         cur.execute(query, params)
         return cur.fetchall()
 
-
 def delete_fixture_logs(ids=None, deleted_by="", note=""):
     deleted_by = "" if deleted_by is None else str(deleted_by).strip()
-    note = "" if note is None else str(note).strip()
-    deleted_at = datetime.now().strftime("%Y%m%dT%H%M%S")
     ids = _normalize_id_list(ids)
+    deleted_at = datetime.now().strftime("%Y%m%dT%H%M%S")
 
     with tx() as conn:
         cur = conn.cursor()
-
-        target_count = _count_target_fixture_logs(conn, ids=ids, include_deleted=False)
 
         if ids:
             qmarks = ",".join("?" for _ in ids)
@@ -275,7 +230,6 @@ def delete_fixture_logs(ids=None, deleted_by="", note=""):
             )
             cur.execute(sql, [deleted_by, deleted_at, *ids])
             affected = cur.rowcount
-            target_repr = json.dumps(ids, ensure_ascii=False)
         else:
             cur.execute(
                 "UPDATE fixture_logs SET "
@@ -286,49 +240,23 @@ def delete_fixture_logs(ids=None, deleted_by="", note=""):
                 (deleted_by, deleted_at),
             )
             affected = cur.rowcount
-            target_repr = "ALL"
-
-        _insert_fixture_log_audit(
-            conn,
-            AUDIT_ACTION_SOFT_DELETE,
-            target_repr,
-            int(affected or 0),
-            audit_user=deleted_by,
-            note=note if note else f"target_count={int(target_count or 0)}",
-        )
 
         conn.commit()
-        return affected
-
+        return int(affected or 0)
 
 def purge_fixture_logs(ids=None, purged_by="", note=""):
-    purged_by = "" if purged_by is None else str(purged_by).strip()
-    note = "" if note is None else str(note).strip()
     ids = _normalize_id_list(ids)
 
     with tx() as conn:
         cur = conn.cursor()
 
-        target_count = _count_target_fixture_logs(conn, ids=ids, include_deleted=True)
-
         if ids:
             qmarks = ",".join("?" for _ in ids)
             cur.execute(f"DELETE FROM fixture_logs WHERE fixture_log_id IN ({qmarks})", ids)
             affected = cur.rowcount
-            target_repr = json.dumps(ids, ensure_ascii=False)
         else:
             cur.execute("DELETE FROM fixture_logs")
             affected = cur.rowcount
-            target_repr = "ALL"
-
-        _insert_fixture_log_audit(
-            conn,
-            AUDIT_ACTION_PURGE,
-            target_repr,
-            int(affected or 0),
-            audit_user=purged_by,
-            note=note if note else f"target_count={int(target_count or 0)}",
-        )
 
         conn.commit()
-        return affected
+        return int(affected or 0)

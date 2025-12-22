@@ -90,49 +90,6 @@ def ensure_changelog_schema(db_path=None, verbose=False):
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_changelog_version ON change_log(version);")
         conn.commit()
 
-def ensure_fixture_adjustment_schema(db_path=None, verbose=False):
-    with get_conn(db_path) as conn:
-        cur = conn.cursor()
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS fixture_adjustment_logs (
-                adjustment_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                adjustment_log_part_no TEXT,
-                adjustment_log_part_name TEXT,
-                adjustment_log_warehouse TEXT,
-                adjustment_log_mode TEXT,
-                adjustment_log_qty INTEGER,
-                adjustment_log_reason TEXT,
-                adjustment_log_user TEXT,
-                adjustment_log_timestamp TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
-        cur.execute("PRAGMA table_info(fixture_adjustment_logs)")
-        existing_cols = [r[1] for r in cur.fetchall()]
-
-        required_cols = {
-            "adjustment_log_part_no": "TEXT",
-            "adjustment_log_part_name": "TEXT",
-            "adjustment_log_warehouse": "TEXT",
-            "adjustment_log_mode": "TEXT",
-            "adjustment_log_qty": "INTEGER",
-            "adjustment_log_reason": "TEXT",
-            "adjustment_log_user": "TEXT",
-            "adjustment_log_timestamp": "TEXT"
-        }
-
-        for col, col_type in required_cols.items():
-            if col not in existing_cols:
-                cur.execute(
-                    f"ALTER TABLE fixture_adjustment_logs ADD COLUMN {col} {col_type}"
-                )
-                if verbose:
-                    print(f"fixture_adjustment_logs 補欄位: {col}")
-
-        conn.commit()
-        cur.close()
-
 def get_next_changelog_version(db_path=None):
     with get_conn(db_path) as conn:
         cursor = conn.cursor()
@@ -185,49 +142,6 @@ def add_col_if_missing(conn, table: str, col: str, col_type: str):
     if col not in cols:
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {col} {col_type}")
     cur.close()
-
-def ensure_fixture_adjustment_schema(db_path=None, verbose=False):
-    if not db_path:
-        raise ValueError("db_path is required")
-
-    create_sql = """
-    CREATE TABLE IF NOT EXISTS fixture_adjustment_logs (
-        adjustment_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        adjustment_log_part_no TEXT NOT NULL,
-        adjustment_log_warehouse TEXT NOT NULL,
-        adjustment_log_before_qty INTEGER NOT NULL,
-        adjustment_log_after_qty INTEGER NOT NULL,
-        adjustment_log_delta_qty INTEGER NOT NULL,
-        adjustment_log_reason TEXT,
-        adjustment_log_user TEXT NOT NULL,
-        adjustment_log_timestamp TEXT NOT NULL
-    )
-    """
-
-    required_cols = {
-        "adjustment_log_id": "INTEGER",
-        "adjustment_log_part_no": "TEXT",
-        "adjustment_log_warehouse": "TEXT",
-        "adjustment_log_before_qty": "INTEGER",
-        "adjustment_log_after_qty": "INTEGER",
-        "adjustment_log_delta_qty": "INTEGER",
-        "adjustment_log_reason": "TEXT",
-        "adjustment_log_user": "TEXT",
-        "adjustment_log_timestamp": "TEXT",
-    }
-
-    with get_conn(db_path) as conn:
-        cur = conn.cursor()
-        cur.execute(create_sql)
-        cur.execute("PRAGMA table_info(fixture_adjustment_logs)")
-        existing = {row[1] for row in cur.fetchall()}
-        for col_name, col_type in required_cols.items():
-            if col_name not in existing:
-                cur.execute(f"ALTER TABLE fixture_adjustment_logs ADD COLUMN {col_name} {col_type}")
-        conn.commit()
-
-    if verbose:
-        print("ensure_fixture_adjustment_schema OK:", db_path)
 
 def ensure_fixture_schema(db_path=None, verbose=False):
     with get_conn(db_path) as conn:
@@ -297,7 +211,6 @@ def ensure_fixture_schema(db_path=None, verbose=False):
 def ensure_all_schemas(db_path, verbose=False):
     ensure_changelog_schema(db_path, verbose)
     ensure_fixture_schema(db_path, verbose)
-    ensure_fixture_adjustment_schema(db_path, verbose)
     auto_add_missing_columns(db_path, get_required_columns(), verbose)
 
 def print_tables_info(db_path: str):
