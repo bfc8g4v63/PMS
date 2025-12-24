@@ -1,5 +1,5 @@
 #$ utils.py
-#% 共用工具、輔助函式
+#% activity_logs 共用工具、輔助函式
 
 import os
 import subprocess
@@ -9,6 +9,7 @@ from datetime import datetime
 import threading
 import functools
 from db_helper import get_conn
+
 
 def open_file(filepath):
     try:
@@ -20,6 +21,7 @@ def open_file(filepath):
             subprocess.call(["xdg-open", filepath])
     except Exception as e:
         messagebox.showerror("錯誤", f"無法開啟檔案: {e}")
+
 
 ACTION_MAP = {
     "add_user": "新增使用者",
@@ -36,6 +38,7 @@ ACTION_MAP = {
     "toggle_bypass": "啟用/停用 SOP"
 }
 
+
 def log_activity(user, action, filename, module=None):
     raw_action = (action or "").strip()
     with get_conn() as conn:
@@ -43,10 +46,10 @@ def log_activity(user, action, filename, module=None):
         cursor.execute(
             """
             INSERT INTO activity_logs (
-                activity_log_username, 
-                activity_log_action, 
-                activity_log_filename, 
-                activity_log_timestamp, 
+                activity_log_username,
+                activity_log_action,
+                activity_log_filename,
+                activity_log_timestamp,
                 activity_log_module
             )
             VALUES (?, ?, ?, ?, ?)
@@ -61,21 +64,36 @@ def log_activity(user, action, filename, module=None):
         )
         conn.commit()
 
+
 def safe_button_action(func):
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         widget = kwargs.get("button")
+        ui_root = kwargs.get("ui_root") or widget
+
+        def _ui_call(cb):
+            if ui_root and hasattr(ui_root, "after"):
+                ui_root.after(0, cb)
+                return True
+            return False
+
         if widget:
-            widget.config(state="disabled")
+            if not _ui_call(lambda: widget.config(state="disabled")):
+                widget.config(state="disabled")
 
         def run():
+            err_msg = None
             try:
                 func(*args, **kwargs)
             except Exception as e:
-                messagebox.showerror("錯誤", str(e))
+                err_msg = str(e)
             finally:
+                if err_msg:
+                    if not _ui_call(lambda m=err_msg: messagebox.showerror("錯誤", m)):
+                        messagebox.showerror("錯誤", err_msg)
                 if widget:
-                    widget.config(state="normal")
+                    if not _ui_call(lambda: widget.config(state="normal")):
+                        widget.config(state="normal")
 
         threading.Thread(target=run, daemon=True).start()
     return wrapper

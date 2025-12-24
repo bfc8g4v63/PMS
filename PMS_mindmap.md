@@ -2,15 +2,23 @@
 
 ---
 
-## 更新重點（截至 2025-12-22）
+## 更新重點（截至 2025-12-23）
 
 * **SOP 模組**
+
   * [x] SOP 資訊
+
     * [x] SOP bypass 欄位邏輯完成（dip / assembly / test / packaging / oqc）
+    * [x] SOP bypass 勾選狀態與資料庫欄位雙向同步
     * [x] SOP 欄位統計邏輯調整為「唯一料號數量」而非筆數
     * [x] SOP 更新時間戳可單獨修改（不必更動內容）
     * [x] SOP 上傳流程統一使用 get_conn()，避免 WAL 重複設定
     * [x] SOP 檔案實體路徑與 DB 記錄一致性檢查
+    * [x] SOP 指向檔案不存在時阻擋操作並提示
+    * [x] SOP 建立行為寫入 activity_logs
+    * [x] SOP 更新行為寫入 activity_logs
+    * [x] SOP 套用行為寫入 activity_logs
+    
   * [x] SOP 生成
     * [x] SOP 上傳/生成流程完成：拼圖選取、排序、合併、生成 PDF
     * [x] SOP 生成套用功能完成：來源檔案選取、批量套用、全選/勾選
@@ -20,12 +28,19 @@
     * [x] SOP 套用流程異常時不中斷整批操作（單筆失敗不中斷）
 
 * **治具管理模組**
+
   * [x] 建立治具時自動生成十二倉別資料（虹堡總倉、上齊、睿均、捷暉、立榮、華勤、上貿、麥博、信利、GC、虹堡工程、不良品）
   * [x] 新增治具時自動建立所有既有倉別資料（非寫死倉名，支援後續擴充）
   * [x] 建立治具驗證（長度 8 或 12 碼、必須為數字）
   * [x] 生成料號（依類別前綴 930–939，確保不重複）
   * [x] 刪除後再新增相同料號，不會遺留舊數據
-  * [x] 入庫 / 調撥流程完成，來源倉與目的倉不可相同，數量不得為負
+  * [x] 建立治具時同步寫入 fixture_logs（CREATE）
+  * [x] 入庫流程完成，數量不得為負
+  * [x] 入庫操作同步寫入 fixture_logs（IN）
+  * [x] 調撥流程完成，來源倉與目的倉不可相同，數量不得為負
+  * [x] 調撥操作同步寫入 fixture_logs（TRANSFER）
+  * [x] 調撥操作同步寫入 transfer_logs
+  * [x] 所有庫存異動僅新增紀錄，不覆寫歷史資料
   * [x] 入庫倉別依 Notebook 分頁自動判斷，不再使用下拉選單
   * [x] 調撥來源倉可由 TreeView 雙擊自動帶入
   * [x] 儲位規則：1-1-1 ~ 9-4-50，不補零；僅虹堡倉有安全庫存與儲位
@@ -35,11 +50,14 @@
   * [x] 匯出 Excel 新增預估請購量 / 預估請購金額 / 預估請購總金額
   * [x] 匯出 Excel 運算統一由資料層處理，UI 不重複計算
   * [x] 三大操作按鈕（新增 / 入庫 / 調撥）全面套用 @safe_button_action
+  * [x] 刪除治具僅刪除主檔與庫存，不刪除任何歷史操作紀錄
   * [x] 消耗功能已移除（不再包含消耗倉）
 
 * **治具紀錄模組**
+
   * [x] 分頁完成：查詢條件（料號 / 使用者）、TreeView 顯示、刪除紀錄
   * [x] 與 fixture_logger 整合（建立 / 入庫 / 調撥 自動寫入）
+  * [x] fixture_logs 動作類型明確區分（CREATE / IN / TRANSFER / ADJUST）
   * [x] fixture_logs 移除 remark 欄位，統一以 action、user、timestamp 記錄
   * [x] Backlog：日期查詢、匯出 Excel
   * [x] fixture_logs 與 transfer_logs 分工完成（操作紀錄 / 調撥紀錄）
@@ -48,6 +66,7 @@
   * [x] 預設查詢筆數限制（避免一次載入全部紀錄）
 
 * **帳號與權限模組**
+
   * [x] 帳號管理
     * [x] 新增使用者
       * [x] 帳號
@@ -86,6 +105,7 @@
         * [x] 密碼修改（admin、engineer）
 
 * **登入與使用者管理**
+
   * [x] 登入顯示使用者名稱
   * [x] 登出同步回寫
   * [x] 一機一開機制
@@ -95,16 +115,21 @@
   * [x] 多視窗重複啟動防呆（同帳號）
 
 * **治具 BOM**
+
   * [x] BOM 資料表初始化納入 ensure_schema 流程
   * [x] BOM 主子料不可相同檢查
   * [x] BOM 刪除僅影響 BOM，不影響治具本體
   * [ ] Backlog：BOM 與庫存連動試算
 
 * **資料庫與穩定性**
+
+  * [x] 主程式啟動階段統一處理 DB path 與初始化
+  * [x] 主程式啟動時執行 schema 初始化與補齊
+  * [x] 主程式啟動時執行庫存一致性檢查（ensure_stock_consistency）
   * [x] SQLite WAL 模式啟用
   * [x] busy_timeout 與 Zombie lock 檢查
   * [x] checkpoint 策略模組化，避免 DB lock
-  * [x] schema_helper / fixture_helper 初始化統一
+  * [x] schema_helper / fixture_helper / fixture_logger 初始化流程對齊
   * [x] 定義不同資料變數數量 usable_qty
   * [x] 正式 DB 路徑整合
   * [x] migrate_db.py 重構（issues → sop_information、changelog → change_log）
@@ -115,6 +140,7 @@
   * [x] WAL checkpoint 僅保留單一策略入口
 
 * **改版歷程**
+
   * [x] 改版紀錄表完成：版本、日期、內容
   * [x] UI：狀態提示不再遮擋輸入框
   * [x] 改版內容支援多行描述
@@ -139,6 +165,7 @@
 ## 介面層
 
 * [x] 圖形介面框架 Tkinter
+
   * [x] 登入介面
     * [x] 輸入框
       * [x] 帳號
@@ -146,18 +173,22 @@
         * [x] tab快捷切換
     * [x] 按鈕
       * [x] 登入（支援 Enter 快捷）
+
         * [x] 主介面
           * [x] SOP資訊
             * [x] 欄位：料號 / 品名 / DIP / 組裝 / 測試 / 包裝 / OQC / SOP建立人 / 時間
             * [x] 修正：SOP 更新時間戳、表格置中與欄寬調整
+
           * [x] SOP生成
             * [x] SOP生成：上傳拼圖、選用拼圖、調整序列、執行生成
               * [x] 上傳按鈕已套用 @safe_button_action
+
             * [x] SOP套用
               * [x] 功能：搜尋、來源選擇、勾選/全選、批量套用綁定資料列
               * [x] 修正：來源清單移除 X 軸；套用清單支援 X 軸與滑鼠滾輪；檢索更精準
               * [x] 修正：搜尋品號邏輯問題
           * [x] SOP紀錄：SOP建立人 / 動作 / 檔案名稱 / 時間
+
           * [x] 治具管理
             * [x] 治具操作
               * [x] 基本資料：治具料號、治具品名、治具規格、治具類群、治具單價（NTD/USD）、安全庫存、儲位、入庫數量
@@ -174,11 +205,13 @@
                 * [x] 調撥（快捷 → 雙擊資料列讀取資料+來源倉預設、人為決策目標倉）→ 入庫數量決策撥出量
                 * [x] 匯出 EXCEL（治具總覽輸出、料件外幣單價、料件本幣單價、料件本幣總價，倉別總價、倉別總數、預估請購量/金額/總額）
                 * [x] 操作按鈕全面套用 @safe_button_action 避免重複觸發
+
           * [x] 治具紀錄
             * [x] 查詢條件：料號 / 使用者
             * [x] TreeView 顯示：單號 / 治具料號 / 治具規格 / 動作 / 異動數量 / 來源倉 / 目的倉 / 治具操作人 / 調帳原因 / 時間
             * [x] 操作功能：查詢 / 刪除紀錄
             * [x] 後端整合：fixture_logger，自動寫入 入庫 / 調撥 / 建立治具紀錄
+
           * [ ] 治具 BOM
             * [x] 後端支援：fixture_boms 資料表與函式（get_bom_by_part, add_bom_item, delete_bom_item）
             * [x] UI 表單：新增 / 刪除 / TreeView 顯示
@@ -186,6 +219,7 @@
           * [ ] Backlog(治具申請)
           * [ ] Backlog(治具損耗)
           * [x] 帳號管理：新增SOP列、刪除SOP列、帳號啟用、可見SOP紀錄、刪除SOP紀錄、上傳SOP、可見SOP資訊、可見治具管理、可編輯治具、可調帳治具、可見治具紀錄、刪除治具紀錄
+
           * [x] 改版歷程：版本 / 日期 / 內容
             * [x] 產生版本
             * [x] 雙擊編輯快捷
@@ -251,25 +285,36 @@
   * [x] DB lock 問題來源已定位至重複 PRAGMA 與多連線寫入
 
 * [x] 表結構現況
+
   * **activity_logs**
+
     * activity_log_id (INTEGER), activity_log_username (TEXT), activity_log_action (TEXT), activity_log_filename (TEXT), activity_log_timestamp (TEXT), activity_log_module (TEXT)
   * **change_log**
+
     * version (TEXT), date (TEXT), content (TEXT)
   * **fixture_boms**
+
     * fixture_bom_id (TEXT), fixture_bom_parent_no (TEXT), fixture_bom_child_no (TEXT), fixture_bom_qty (INTEGER), fixture_bom_timestamp (TEXT)
   * **fixture_logs**
+
     * fixture_log_id (TEXT), fixture_log_part_no (TEXT), fixture_log_action (TEXT), fixture_log_qty (INTEGER), fixture_log_from_wh (TEXT), fixture_log_to_wh (TEXT), fixture_log_user (TEXT), fixture_log_timestamp (TEXT)
   * **fixtures**
+
     * part_no (TEXT), part_name (TEXT), part_spec (TEXT), part_group (TEXT), unit_price_ntd (REAL), unit_price_usd (REAL), safety_stock (INTEGER), storage_location (TEXT), created_at (TEXT)
   * **sop_information**
+
     * product_code (TEXT), product_name (TEXT), dip_sop (TEXT), assembly_sop (TEXT), test_sop (TEXT), packaging_sop (TEXT), oqc_checklist (TEXT), created_by (TEXT), created_at (TEXT), dip_sop_bypass (INTEGER), assembly_sop_bypass (INTEGER), test_sop_bypass (INTEGER), packaging_sop_bypass (INTEGER), oqc_checklist_bypass (INTEGER)
   * **sqlite_sequence**
+
     * name (), seq ()
   * **transfer_logs**
+
     * transfer_log_id (TEXT), transfer_log_part_no (TEXT), transfer_log_from_wh (TEXT), transfer_log_to_wh (TEXT), transfer_log_qty (INTEGER), transfer_log_user (TEXT), transfer_log_timestamp (TEXT)
   * **users**
+
     * username (TEXT), password (TEXT), role (TEXT), specialty (TEXT), can_view_logs (INTEGER), can_delete_logs (INTEGER), can_upload_sop (INTEGER), can_view_sop_info (INTEGER), can_manage_users (INTEGER), can_add (INTEGER), can_delete (INTEGER), active (INTEGER)
   * **warehouse_stock**
+
     * part_no (TEXT), warehouse (TEXT), usable_qty (INTEGER), safety_stock (INTEGER)
 
 ---
@@ -280,7 +325,7 @@
   * [ ] 申請來源：倉別使用者（上齊 / 代工廠 / 工程）
   * [ ] 起單僅能選擇「可視倉別」內的治具
   * [ ] 起單內容
-    * [ ] 治具料號
+    * [x] 治具料號
     * [ ] 申請數量
     * [ ] 使用用途
     * [ ] 預計使用期間
@@ -301,8 +346,8 @@
 * [ ] 借出單流程
   * [ ] 核准後自動生成借出單號
   * [ ] 借出單內容
-    * [ ] 來源倉
-    * [ ] 目的倉
+    * [x] 來源倉
+    * [x] 目的倉
     * [ ] 借出數量
     * [ ] 借出人
     * [ ] 核准人
@@ -334,12 +379,12 @@
   * [ ] 虹堡母公司角色可視所有倉
   * [ ] 代工廠僅可視自身倉
 
-* [ ] 功能權限分離
+* [x] 功能權限分離
   * [ ] 可起單
   * [ ] 可審核
-  * [ ] 可調撥
-  * [ ] 可刪除紀錄
-  * [ ] 可見全倉總覽
+  * [x] 可調撥
+  * [x] 可刪除紀錄
+  * [x] 可見全倉總覽
 
 * [ ] UI 層權限過濾
   * [ ] Notebook 分頁依權限動態生成
@@ -349,7 +394,9 @@
 ---
 
 ## 資料庫擴充（規劃）
+
 * **Upcoming Features**
+
 * [x] product_BOM
   * [x] bom_id
     * [x] part_no (TEXT)
@@ -358,6 +405,7 @@
     * [x] part_group (TEXT)
     * [ ] environment_bom_qty
     * [ ] environment_bom_created_at (TEXT)
+
 * [ ] request_logs
   * [ ] request_id
   * [ ] part_no

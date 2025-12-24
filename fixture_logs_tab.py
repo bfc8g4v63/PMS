@@ -8,7 +8,6 @@ from date_picker import open_date_picker
 from datetime import datetime
 from db_helper import tx
 
-
 def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
     if refresh_only:
         for widget in frame.winfo_children():
@@ -115,7 +114,10 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
         "時間"
     )
 
-    tree = ttk.Treeview(frame, columns=columns, show="headings")
+    tree_container = ttk.Frame(frame)
+    tree_container.pack(fill="both", expand=True, padx=5, pady=5)
+
+    tree = ttk.Treeview(tree_container, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
         if col == "治具料號":
@@ -139,12 +141,35 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
         else:
             tree.column(col, width=100, anchor="center")
 
-    tree.pack(fill="both", expand=True, padx=5, pady=5)
+    yscroll = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+    xscroll = ttk.Scrollbar(tree_container, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+
+    tree_container.grid_rowconfigure(0, weight=1)
+    tree_container.grid_columnconfigure(0, weight=1)
+
+    tree.grid(row=0, column=0, sticky="nsew")
+    yscroll.grid(row=0, column=1, sticky="ns")
+    xscroll.grid(row=1, column=0, sticky="ew")
+
+    def _has_query_filters():
+        if part_no_var.get().strip():
+            return True
+        if user_var.get().strip():
+            return True
+        if action_var.get().strip():
+            return True
+        if start_date_var.get().strip():
+            return True
+        if end_date_var.get().strip():
+            return True
+        return False
 
     def _parse_ymd(text: str):
         s = (text or "").strip()
         if not s:
             return None
+
         try:
             return datetime.strptime(s, "%Y-%m-%d")
         except ValueError:
@@ -177,13 +202,14 @@ def build_fixture_logs_tab(frame, refresh_only=False, current_user=None):
 
             action_filter = action_var.get().strip() or None
 
+            limit_value = None if _has_query_filters() else 200
             logs = get_fixture_logs(
                 part_no=part_no_var.get().strip() or None,
                 user=user_var.get().strip() or None,
                 action=action_filter,
                 start_ts=start_ts,
                 end_ts=end_ts,
-                limit=200
+                limit=limit_value
             )
 
             for row in tree.get_children():

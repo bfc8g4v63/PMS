@@ -90,50 +90,50 @@ def ensure_changelog_schema(db_path=None, verbose=False):
         cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_changelog_version ON change_log(version);")
         conn.commit()
 
-def get_next_changelog_version(db_path=None):
+def _parse_semver(version_text):
+    m = re.match(r"^v(\d+)\.(\d+)\.(\d+)$", (version_text or "").strip())
+    if not m:
+        return None
+    return tuple(map(int, m.groups()))
+
+def get_latest_changelog_version(db_path=None):
     with get_conn(db_path) as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT DISTINCT version FROM change_log")
-        versions = [row[0] for row in cursor.fetchall()]
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT version FROM change_log")
+        versions = [r[0] for r in cur.fetchall()]
 
-    pattern = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-    triplets = []
-    for v in versions:
-        m = pattern.match(v or "")
-        if m:
-            triplets.append(tuple(map(int, m.groups())))
-
-    if not triplets:
+    parsed = [_parse_semver(v) for v in versions]
+    parsed = [p for p in parsed if p is not None]
+    if not parsed:
         return "v1.0.0"
+    major, minor, patch = max(parsed)
+    return f"v{major}.{minor}.{patch}"
 
-    major, minor, patch = max(triplets)
+def get_next_changelog_version(db_path=None, bump="patch"):
+    latest = get_latest_changelog_version(db_path)
+    base = _parse_semver(latest) or (1, 0, 0)
+    major, minor, patch = base
 
-    if patch < 9:
-        patch += 1
+    bump_norm = (bump or "patch").strip().lower()
+    if bump_norm == "major":
+        major, minor, patch = major + 1, 0, 0
+    elif bump_norm == "minor":
+        major, minor, patch = major, minor + 1, 0
     else:
-        patch = 0
-        if minor < 9:
-            minor += 1
-        else:
-            minor = 0
-            major += 1
+        major, minor, patch = major, minor, patch + 1
 
-    next_version = f"v{major}.{minor}.{patch}"
+    candidate = f"v{major}.{minor}.{patch}"
 
-    existing = set(v for v in versions if pattern.match(v or ""))
-    while next_version in existing:
-        if patch < 9:
-            patch += 1
-        else:
-            patch = 0
-            if minor < 9:
-                minor += 1
-            else:
-                minor = 0
-                major += 1
-        next_version = f"v{major}.{minor}.{patch}"
+    with get_conn(db_path) as conn:
+        cur = conn.cursor()
+        cur.execute("SELECT DISTINCT version FROM change_log")
+        existing = {r[0] for r in cur.fetchall()}
 
-    return next_version
+    while candidate in existing:
+        patch += 1
+        candidate = f"v{major}.{minor}.{patch}"
+
+    return candidate
 
 def add_col_if_missing(conn, table: str, col: str, col_type: str):
     cur = conn.cursor()

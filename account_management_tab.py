@@ -92,11 +92,24 @@ def build_user_management_tab(tab, db_name, current_user):
         "刪除治具紀錄"
     )
 
-    tree = ttk.Treeview(frame, columns=columns, show="headings")
+    tree_container = ttk.Frame(frame)
+    tree_container.pack(fill="both", expand=True, pady=5)
+
+    tree = ttk.Treeview(tree_container, columns=columns, show="headings")
     for col in columns:
         tree.heading(col, text=col)
         tree.column(col, width=100, anchor="center")
-    tree.pack(fill="both", expand=True, pady=5)
+
+    yscroll = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+    xscroll = ttk.Scrollbar(tree_container, orient="horizontal", command=tree.xview)
+    tree.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+
+    tree_container.grid_rowconfigure(0, weight=1)
+    tree_container.grid_columnconfigure(0, weight=1)
+
+    tree.grid(row=0, column=0, sticky="nsew")
+    yscroll.grid(row=0, column=1, sticky="ns")
+    xscroll.grid(row=1, column=0, sticky="ew")
 
     def _flag_text(v):
         return "Y" if int(v or 0) == 1 else "N"
@@ -298,13 +311,13 @@ def build_user_management_tab(tab, db_name, current_user):
         with _open_conn() as conn:
             cursor = conn.cursor()
 
+            target_username = original_username
             if new_username and new_username != original_username:
                 cursor.execute("SELECT username FROM users WHERE username=?", (new_username,))
                 if cursor.fetchone():
                     messagebox.showerror("錯誤", "新帳號名稱已存在")
                     return
-                cursor.execute("UPDATE users SET username=? WHERE username=?", (new_username, original_username))
-                original_username = new_username
+                target_username = new_username
 
             if new_pass:
                 if not re.match(r"^[A-Za-z0-9]{6,12}$", new_pass):
@@ -312,7 +325,7 @@ def build_user_management_tab(tab, db_name, current_user):
                     return
                 hashed_pw = hash_password(new_pass)
                 sql = (
-                    "UPDATE users SET password=?, role=?, specialty=?, "
+                    "UPDATE users SET username=?, password=?, role=?, specialty=?, "
                     "can_add=?, can_delete=?, active=?, "
                     "can_view_logs=?, can_delete_logs=?, can_upload_sop=?, "
                     "can_view_sop_info=?, can_manage_users=?, "
@@ -321,7 +334,7 @@ def build_user_management_tab(tab, db_name, current_user):
                     "WHERE username=?"
                 )
                 params = (
-                    hashed_pw, role, specialty,
+                    target_username, hashed_pw, role, specialty,
                     permissions["can_add"], permissions["can_delete"], permissions["active"],
                     permissions["can_view_logs"], permissions["can_delete_logs"], permissions["can_upload_sop"],
                     permissions["can_view_sop_info"], permissions["can_manage_users"],
@@ -332,7 +345,7 @@ def build_user_management_tab(tab, db_name, current_user):
                 cursor.execute(sql, params)
             else:
                 sql = (
-                    "UPDATE users SET role=?, specialty=?, "
+                    "UPDATE users SET username=?, role=?, specialty=?, "
                     "can_add=?, can_delete=?, active=?, "
                     "can_view_logs=?, can_delete_logs=?, can_upload_sop=?, "
                     "can_view_sop_info=?, can_manage_users=?, "
@@ -341,7 +354,7 @@ def build_user_management_tab(tab, db_name, current_user):
                     "WHERE username=?"
                 )
                 params = (
-                    role, specialty,
+                    target_username, role, specialty,
                     permissions["can_add"], permissions["can_delete"], permissions["active"],
                     permissions["can_view_logs"], permissions["can_delete_logs"], permissions["can_upload_sop"],
                     permissions["can_view_sop_info"], permissions["can_manage_users"],
@@ -352,6 +365,7 @@ def build_user_management_tab(tab, db_name, current_user):
                 cursor.execute(sql, params)
 
             conn.commit()
+            original_username = target_username
 
         messagebox.showinfo("成功", "已更新")
         if current_username:

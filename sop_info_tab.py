@@ -10,7 +10,6 @@ from datetime import datetime
 from db_helper import get_conn
 from utils import log_activity, open_file
 
-
 SOP_FIELDS = {
     "dip": ("DIP SOP", "dip_sop", "dip_sop_bypass"),
     "assembly": ("組裝SOP", "assembly_sop", "assembly_sop_bypass"),
@@ -27,7 +26,6 @@ OQC_PATH = r"\\192.120.100.177\工程部\生產管理\上齊SOP大禮包\檢查�
 
 SOP_BASE_PATHS = [DIP_SOP_PATH, ASSEMBLY_SOP_PATH, TEST_SOP_PATH, PACKAGING_SOP_PATH, OQC_PATH]
 
-
 def _is_valid_file(file_path: str, field_name: str) -> bool:
     allowed_extensions = [".pdf"]
     if field_name == "oqc_checklist":
@@ -35,9 +33,11 @@ def _is_valid_file(file_path: str, field_name: str) -> bool:
     ext = os.path.splitext(file_path)[1].lower()
     return ext in allowed_extensions
 
-
 def _save_file_if_exist(file_path, target_folder, product_code, product_name, field_name):
     if not file_path:
+        return "", ""
+    if not os.path.exists(file_path):
+        messagebox.showerror("錯誤", f"找不到檔案：{file_path}")
         return "", ""
     if not _is_valid_file(file_path, field_name):
         messagebox.showerror(
@@ -63,18 +63,30 @@ def _save_file_if_exist(file_path, target_folder, product_code, product_name, fi
         shutil.copy(file_path, target_path)
         return filename, timestamp
     except Exception as e:
-        print(f"檔案儲存失敗: {e}")
+        messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
         return "", ""
 
-
-def _save_file(file_path, target_folder, username, product_code, product_name, log=True):
+def _save_file(file_path, target_folder, username, product_code, product_name, field_name, log=True):
     if not os.path.exists(file_path):
+        messagebox.showerror("錯誤", f"找不到檔案：{file_path}")
         return ""
+    if not _is_valid_file(file_path, field_name):
+        messagebox.showerror(
+            "錯誤",
+            f"這個檔案格式不合法：{file_path}\n只允許副檔名：.pdf{('、.xlsx' if field_name == 'oqc_checklist' else '')}",
+        )
+        return ""
+
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    safe_name = (product_name or "").replace("/", "-").replace("\\", "-")
+    safe_name = (product_name or "").replace("/", "-").replace("\\", "-").strip()
+    if not safe_name:
+        messagebox.showerror("錯誤", "品名不合法，無法正確生成檔名")
+        return ""
+
     ext = os.path.splitext(file_path)[1].lower()
     filename = f"{product_code}_{safe_name}_{timestamp}{ext}"
     target_path = os.path.join(target_folder, filename)
+
     try:
         shutil.copy(file_path, target_path)
         if log:
@@ -84,13 +96,11 @@ def _save_file(file_path, target_folder, username, product_code, product_name, l
         messagebox.showerror("錯誤", f"檔案儲存失敗: {e}")
         return ""
 
-
 def _update_sop_field(cursor, product_code, field_name, display_name):
     cursor.execute(
         f"UPDATE sop_information SET {field_name}=?, created_at=? WHERE product_code=?",
         (display_name, datetime.now().strftime("%Y%m%dT%H%M%S"), product_code),
     )
-
 
 def _handle_sop_update(product_code, entry_widget, sop_path, field_name, current_user):
     path = entry_widget.get().strip()
@@ -107,7 +117,7 @@ def _handle_sop_update(product_code, entry_widget, sop_path, field_name, current
             messagebox.showerror("錯誤", f"找不到料號 {product_code}，無法補上品名。")
             return None
 
-    display_name = _save_file(path, sop_path, current_user, product_code, product_name, log=False)
+    display_name = _save_file(path, sop_path, current_user, product_code, product_name, field_name, log=False)
     if not display_name:
         return None
 
@@ -121,7 +131,6 @@ def _handle_sop_update(product_code, entry_widget, sop_path, field_name, current
 
     log_activity(user=current_user, action="update_sop", filename=display_name, module="SOP資訊")
     return display_name
-
 
 def _create_sop_update_button(
     frame,
@@ -159,7 +168,6 @@ def _create_sop_update_button(
     btn = tk.Button(frame, text="更新", command=update_action)
     btn.grid(row=row, column=3, padx=5)
     return btn
-
 
 def _create_upload_field_with_update(
     row,
@@ -201,7 +209,6 @@ def _create_upload_field_with_update(
         on_refresh=on_refresh,
     )
     return entry
-
 
 def build_sop_info_tab(tab_frame, db_name, login_info):
     current_user = login_info["user"]
@@ -335,11 +342,13 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
                 if o_file:
                     log_activity(user=current_user, action="upload", filename=o_file, module="SOP資訊")
 
+                sql = (
+                    "INSERT INTO sop_information "
+                    "(product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                )
                 cursor.execute(
-                    """
-                    INSERT INTO sop_information (product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
+                    sql,
                     (
                         code,
                         name,
@@ -355,7 +364,7 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
                 conn.commit()
 
             messagebox.showinfo("成功", "已新增紀錄")
-            for e in [entry_code, entry_name, entry_dip, entry_assembly, entry_test, entry_packaging, entry_oqc]:
+            for e in (entry_code, entry_name, entry_dip, entry_assembly, entry_test, entry_packaging, entry_oqc):
                 e.delete(0, tk.END)
             query_data()
 
@@ -384,7 +393,13 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
     tk.Button(query_frame, text="查詢", command=lambda: query_data()).pack(side="left")
 
     columns = ("料號", "品名", "DIP SOP", "組裝SOP", "測試SOP", "包裝SOP", "檢查表OQC", "SOP建立人", "建立時間")
-    tree = ttk.Treeview(tab_frame, columns=columns, show="headings")
+
+    tree_container = tk.Frame(tab_frame)
+    tree_container.pack(fill="both", expand=True, padx=10, pady=5)
+
+    tree = ttk.Treeview(tree_container, columns=columns, show="headings")
+    tree_scroll_y = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+    tree.configure(yscrollcommand=tree_scroll_y.set)
 
     for col in columns:
         tree.heading(col, text=col)
@@ -397,12 +412,11 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
         else:
             tree.column(col, width=120, anchor="center")
 
-    tree.pack(fill="both", expand=True, padx=10, pady=5)
+    tree.pack(side="left", fill="both", expand=True)
+    tree_scroll_y.pack(side="right", fill="y")
 
     sop_stats_var = tk.StringVar()
-    tk.Label(tab_frame, textvariable=sop_stats_var, anchor="w", fg="blue", font=("Arial", 10)).pack(
-        fill="x", padx=10, pady=(0, 5)
-    )
+    tk.Label(tab_frame, textvariable=sop_stats_var, anchor="w", fg="blue", font=("Arial", 10)).pack(fill="x", padx=10, pady=(0, 5))
 
     def update_sop_statistics():
         stats = {"DIP SOP": 0, "組裝 SOP": 0, "測試 SOP": 0, "包裝 SOP": 0, "檢查表 OQC": 0}
@@ -433,10 +447,14 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
 
         with get_conn() as conn:
             cursor = conn.cursor()
-            base_query = """
-                SELECT product_code, product_name, dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, created_by, created_at
-                FROM sop_information
-            """
+            base_query = (
+                "SELECT "
+                "product_code, product_name, "
+                "dip_sop, assembly_sop, test_sop, packaging_sop, oqc_checklist, "
+                "created_by, created_at, "
+                "dip_sop_bypass, assembly_sop_bypass, test_sop_bypass, packaging_sop_bypass, oqc_checklist_bypass "
+                "FROM sop_information"
+            )
 
             conditions = []
             params = []
@@ -458,41 +476,41 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
                 else:
                     condition_sql = "((product_code COLLATE NOCASE) LIKE ? OR (product_name COLLATE NOCASE) LIKE ?)"
                     params = [f"%{raw_input}%", f"%{raw_input}%"]
-                final_query = f"{base_query} WHERE {condition_sql} ORDER BY created_at {'DESC' if sort_desc.get() else 'ASC'}"
+
+            order_sql = f" ORDER BY created_at {'DESC' if sort_desc.get() else 'ASC'}"
+            if raw_input:
+                final_query = f"{base_query} WHERE {condition_sql}{order_sql}"
             else:
-                final_query = f"{base_query} ORDER BY created_at {'DESC' if sort_desc.get() else 'ASC'}"
+                final_query = f"{base_query}{order_sql} LIMIT 200"
 
             cursor.execute(final_query, params)
             rows = cursor.fetchall()
 
-            bypass_fields = [
-                "dip_sop_bypass",
-                "assembly_sop_bypass",
-                "test_sop_bypass",
-                "packaging_sop_bypass",
-                "oqc_checklist_bypass",
-            ]
-
             for row in rows:
-                row_display = list(row)
-                product_code = str(row_display[0]).zfill(8)
-                product_name = row_display[1]
-                timestamp = row_display[8]
+                product_code_raw = row[0]
+                product_name = row[1]
+                timestamp = row[8]
+                product_code = str(product_code_raw).zfill(8)
+
+                row_display = [product_code, product_name, "", "", "", "", "", row[7], timestamp]
+
+                bypass_flags = {
+                    2: int(row[9] or 0),
+                    3: int(row[10] or 0),
+                    4: int(row[11] or 0),
+                    5: int(row[12] or 0),
+                    6: int(row[13] or 0),
+                }
 
                 for i in range(2, 7):
-                    sop_file = row_display[i]
+                    sop_file = row[i]
                     if sop_file:
                         display_name = f"{product_code}_{product_name}_{timestamp}"
-                        cursor.execute(f"SELECT {bypass_fields[i - 2]} FROM sop_information WHERE product_code=?", (product_code,))
-                        bypass = cursor.fetchone()
-                        if bypass and bypass[0]:
+                        if bypass_flags.get(i, 0) == 1:
                             row_display[i] = f"（已停用） {display_name}"
                         else:
                             row_display[i] = display_name
-                    else:
-                        row_display[i] = ""
 
-                row_display[0] = product_code
                 tree.insert("", tk.END, values=row_display)
 
         update_sop_statistics()
@@ -597,9 +615,14 @@ def build_sop_info_tab(tab_frame, db_name, login_info):
             return
 
         product_code = tree.item(item)["values"][0]
-        sop_key = list(SOP_FIELDS.keys())[col_index - 2]
-        field_name = SOP_FIELDS[sop_key][1]
-        bypass_field = SOP_FIELDS[sop_key][2]
+        field_map = {
+            2: ("dip_sop", "dip_sop_bypass"),
+            3: ("assembly_sop", "assembly_sop_bypass"),
+            4: ("test_sop", "test_sop_bypass"),
+            5: ("packaging_sop", "packaging_sop_bypass"),
+            6: ("oqc_checklist", "oqc_checklist_bypass"),
+        }
+        field_name, bypass_field = field_map[col_index]
 
         menu = tk.Menu(tree, tearoff=0)
         menu.add_command(label="啟用/停用", command=lambda: toggle_bypass(product_code, field_name, bypass_field))

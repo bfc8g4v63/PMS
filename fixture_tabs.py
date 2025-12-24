@@ -562,14 +562,26 @@ def build_fixture_tab(parent, current_user: str = None, on_change=None):
         cols = ("part_no", "part_name", "part_spec", "part_group", "unit_price_usd", "unit_price_ntd", "total_price_ntd", "safety_stock", "storage_location", "usable_qty")
         headers = ["治具料號", "治具品名", "治具規格", "治具類群", "單價USD", "單價NTD", "總價NTD", "安全庫存", "儲位", "可用數量"]
 
-        tree = ttk.Treeview(frame, columns=cols, show="headings")
+        tree_container = ttk.Frame(frame)
+        tree_container.pack(fill="both", expand=True)
+
+        tree = ttk.Treeview(tree_container, columns=cols, show="headings")
         trees[wh] = tree
         for c, t in zip(cols, headers):
             tree.heading(c, text=t)
             tree.column(c, width=90, anchor="center")
         tree.column("part_name", width=240)
         tree.column("part_spec", width=240)
-        tree.pack(fill="both", expand=True)
+
+        yscroll = ttk.Scrollbar(tree_container, orient="vertical", command=tree.yview)
+        tree.configure(yscrollcommand=yscroll.set)
+
+        tree_container.grid_rowconfigure(0, weight=1)
+        tree_container.grid_columnconfigure(0, weight=1)
+
+        tree.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+
         refresh_fixture_tree(tree, wh, total_labels[wh], total_price_labels[wh], filters=_get_filters())
 
         def on_double(event, tree=tree, wh=wh):
